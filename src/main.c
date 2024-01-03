@@ -28,14 +28,13 @@ void send_frame(uint8_t* data, int len) {
 }
 
 void init() {
-	int32_t pending_interrupts = 0;
-    int val = 0;
-
 	printf("Intel(R) 2.5G Ethernet Linux Driver\n");
 	printf("driver name: igc\n");
 	printf("auther: Intel Corporation, <linux.nics@intel.com>\n");
 	printf("Copyright(c) 2018 Intel Corporation.");
 
+	int32_t pending_interrupts = 0;
+    int val = 0;
 	int fd = atemsys_pci_open(&pci_device_descriptor);
     void* io_addr = atemsys_map_io(fd, &pci_device_descriptor);
 
@@ -59,7 +58,7 @@ void init() {
   		val = read(adapter.fd, &pending_interrupts, sizeof(int32_t));
 		igc_intr_msi(&adapter);
 	}
-	// at this point all interrupts are cleared and any call to igc_intr_msi()
+	// at this point all interrupts are cleared and any call to read()
 	// will block until a frame is sent or received, or the link status changes
 }
 

@@ -113,8 +113,9 @@ static void igc_unmap_tx_buffer(struct igc_tx_buffer *buf)
  * igc_clean_tx_ring - Free Tx Buffers
  * @tx_ring: ring to be cleaned
  */
-static void igc_clean_tx_ring(struct igc_ring *tx_ring)
+static void igc_clean_tx_ring(struct igc_adapter *adapter)
 {
+	struct igc_ring *tx_ring = &adapter->tx_ring;
 	uint16_t i = tx_ring->next_to_clean;
 	struct igc_tx_buffer *tx_buffer = &tx_ring->tx_buffer_info[i];
 
@@ -166,9 +167,9 @@ static void igc_clean_tx_ring(struct igc_ring *tx_ring)
 	tx_ring->next_to_clean = 0;
 }
 
-void igc_disable_tx_ring(struct igc_ring *ring)
+void igc_disable_tx_ring(struct igc_adapter *adapter)
 {
-	struct igc_hw *hw = &ring->q_vector->adapter->hw;
+	struct igc_hw *hw = &adapter->hw;
 
 	uint32_t txdctl = rd32(IGC_TXDCTL);
 	txdctl &= ~IGC_TXDCTL_QUEUE_ENABLE;
@@ -182,10 +183,12 @@ void igc_disable_tx_ring(struct igc_ring *ring)
  *
  * Free all transmit software resources
  */
-void igc_free_tx_resources(struct igc_ring *tx_ring)
+void igc_free_tx_resources(struct igc_adapter *adapter)
 {
-	igc_disable_tx_ring(tx_ring);
-	igc_clean_tx_ring(tx_ring);
+	struct igc_ring *tx_ring = &adapter->tx_ring;
+
+	igc_disable_tx_ring(adapter);
+	igc_clean_tx_ring(adapter);
 
 	free(tx_ring->tx_buffer_info);
 	tx_ring->tx_buffer_info = NULL;
@@ -205,8 +208,9 @@ void igc_free_tx_resources(struct igc_ring *tx_ring)
  *
  * Return 0 on success, negative on failure
  */
-int igc_setup_tx_resources(struct igc_adapter *adapter, struct igc_ring *tx_ring)
+int igc_setup_tx_resources(struct igc_adapter *adapter)
 {
+	struct igc_ring *tx_ring = &adapter->tx_ring;
 	int size = sizeof(struct igc_tx_buffer) * tx_ring->count;
 
 	tx_ring->tx_buffer_info = malloc(size);
@@ -238,8 +242,9 @@ err:
  * igc_clean_rx_ring - Free Rx Buffers per Queue
  * @ring: ring to free buffers from
  */
-static void igc_clean_rx_ring(struct igc_ring *rx_ring)
+static void igc_clean_rx_ring(struct igc_adapter *adapter)
 {
+	struct igc_ring *rx_ring = &adapter->rx_ring;
 	uint16_t i = rx_ring->next_to_clean;
 
 	while (i != rx_ring->next_to_alloc) {
@@ -263,9 +268,10 @@ static void igc_clean_rx_ring(struct igc_ring *rx_ring)
  *
  * Free all receive software resources
  */
-void igc_free_rx_resources(struct igc_ring *rx_ring)
+void igc_free_rx_resources(struct igc_adapter *adapter)
 {
-	igc_clean_rx_ring(rx_ring);
+	struct igc_ring *rx_ring = &adapter->rx_ring;
+	igc_clean_rx_ring(adapter);
 
 	free(rx_ring->rx_buffer_info);
 	rx_ring->rx_buffer_info = NULL;
@@ -281,12 +287,12 @@ void igc_free_rx_resources(struct igc_ring *rx_ring)
 
 /**
  * igc_setup_rx_resources - allocate Rx resources (Descriptors)
- * @rx_ring:    rx descriptor ring (for a specific queue) to setup
  *
  * Returns 0 on success, negative on failure
  */
-int igc_setup_rx_resources(struct igc_adapter *adapter, struct igc_ring *rx_ring)
+int igc_setup_rx_resources(struct igc_adapter *adapter)
 {
+	struct igc_ring *rx_ring = &adapter->rx_ring;
 	int size = sizeof(struct igc_rx_buffer) * rx_ring->count;
 
 	rx_ring->rx_buffer_info = malloc(size);
@@ -322,13 +328,13 @@ err:
  *
  * Configure the Rx unit of the MAC after a reset.
  */
-static void igc_configure_rx_ring(struct igc_adapter *adapter,
-				  struct igc_ring *ring)
+static void igc_configure_rx_ring(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
+	struct igc_ring *rx_ring = &adapter->rx_ring;
 	union igc_adv_rx_desc *rx_desc;
 	uint32_t srrctl = 0, rxdctl = 0;
-	uint64_t rdba = ring->dma;
+	uint64_t rdba = rx_ring->dma;
 	uint32_t buf_size;
 
 	/* disable the queue */
@@ -339,16 +345,16 @@ static void igc_configure_rx_ring(struct igc_adapter *adapter,
 	     rdba & 0x00000000ffffffffULL);
 	wr32(IGC_RDBAH, rdba >> 32);
 	wr32(IGC_RDLEN,
-	     ring->count * sizeof(union igc_adv_rx_desc));
+	     rx_ring->count * sizeof(union igc_adv_rx_desc));
 
 	/* initialize head and tail */
-	ring->tail = adapter->io_addr + IGC_RDT;
+	rx_ring->tail = adapter->io_addr + IGC_RDT;
 	wr32(IGC_RDH, 0);
 	wr32(IGC_RDT, 0);
 
 	/* reset next-to- use/clean to place SW in sync with hardware */
-	ring->next_to_clean = 0;
-	ring->next_to_use = 0;
+	rx_ring->next_to_clean = 0;
+	rx_ring->next_to_use = 0;
 
 	buf_size = IGC_RXBUFFER_2048;
 
@@ -366,11 +372,11 @@ static void igc_configure_rx_ring(struct igc_adapter *adapter,
 	rxdctl |= IGC_RX_WTHRESH << 16;
 
 	/* initialize rx_buffer_info */
-	memset(ring->rx_buffer_info, 0,
-	       sizeof(struct igc_rx_buffer) * ring->count);
+	memset(rx_ring->rx_buffer_info, 0,
+	       sizeof(struct igc_rx_buffer) * rx_ring->count);
 
 	/* initialize Rx descriptor 0 */
-	rx_desc = IGC_RX_DESC(ring, 0);
+	rx_desc = IGC_RX_DESC(rx_ring, 0);
 	rx_desc->wb.upper.length = 0;
 
 	/* enable receive descriptor fetching */
@@ -386,11 +392,11 @@ static void igc_configure_rx_ring(struct igc_adapter *adapter,
  *
  * Configure a transmit ring after a reset.
  */
-static void igc_configure_tx_ring(struct igc_adapter *adapter,
-				  struct igc_ring *ring)
+static void igc_configure_tx_ring(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
-	uint64_t tdba = ring->dma;
+	struct igc_ring *tx_ring = &adapter->tx_ring;
+	uint64_t tdba = tx_ring->dma;
 	uint32_t txdctl = 0;
 
 	/* disable the queue */
@@ -398,12 +404,12 @@ static void igc_configure_tx_ring(struct igc_adapter *adapter,
 	wrfl();
 
 	wr32(IGC_TDLEN,
-	     ring->count * sizeof(union igc_adv_tx_desc));
+	     tx_ring->count * sizeof(union igc_adv_tx_desc));
 	wr32(IGC_TDBAL,
 	     tdba & 0x00000000ffffffffULL);
 	wr32(IGC_TDBAH, tdba >> 32);
 
-	ring->tail = adapter->io_addr + IGC_TDT;
+	tx_ring->tail = adapter->io_addr + IGC_TDT;
 	wr32(IGC_TDH, 0);
 	wr32(IGC_TDT, 0);
 
@@ -476,7 +482,7 @@ static void igc_setup_tctl(struct igc_adapter *adapter)
 void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len)
 {
 	struct igc_hw *hw = &adapter->hw;
-	struct igc_ring *tx_ring = adapter->tx_ring;
+	struct igc_ring *tx_ring = &adapter->tx_ring;
 	struct igc_tx_buffer *first;
 
 	static int iii = 0;
@@ -658,9 +664,10 @@ static bool igc_alloc_mapped_page(struct igc_adapter *adapter, struct igc_ring *
  * @rx_ring: rx descriptor ring
  * @cleaned_count: number of buffers to clean
  */
-static void igc_alloc_rx_buffers(struct igc_adapter *adapter, struct igc_ring *rx_ring, uint16_t cleaned_count)
+static void igc_alloc_rx_buffers(struct igc_adapter *adapter, uint16_t cleaned_count)
 {
 	struct igc_hw *hw = &adapter->hw;
+	struct igc_ring *rx_ring = &adapter->rx_ring;
 	union igc_adv_rx_desc *rx_desc;
 	uint16_t i = rx_ring->next_to_use;
 	struct igc_rx_buffer *bi;
@@ -712,7 +719,7 @@ static void igc_alloc_rx_buffers(struct igc_adapter *adapter, struct igc_ring *r
 
 static void igc_clean_rx_irq(struct igc_adapter *adapter)
 {
-	struct igc_ring *rx_ring = adapter->rx_ring;
+	struct igc_ring *rx_ring = &adapter->rx_ring;
 	uint16_t cleaned_count = igc_desc_unused(rx_ring);
 
 	while (true) {
@@ -723,7 +730,7 @@ static void igc_clean_rx_irq(struct igc_adapter *adapter)
 
 		/* return some buffers to hardware, one at a time is too slow */
 		if (cleaned_count >= IGC_RX_BUFFER_WRITE) {
-			igc_alloc_rx_buffers(adapter, rx_ring, cleaned_count);
+			igc_alloc_rx_buffers(adapter, cleaned_count);
 			cleaned_count = 0;
 		}
 
@@ -754,12 +761,12 @@ static void igc_clean_rx_irq(struct igc_adapter *adapter)
 	}
 
 	if (cleaned_count)
-		igc_alloc_rx_buffers(adapter, rx_ring, cleaned_count);
+		igc_alloc_rx_buffers(adapter, cleaned_count);
 }
 
 static void igc_clean_tx_irq(struct igc_adapter *adapter)
 {
-	struct igc_ring *tx_ring = adapter->tx_ring;
+	struct igc_ring *tx_ring = &adapter->tx_ring;
 	unsigned int i = tx_ring->next_to_clean;
 	struct igc_tx_buffer *tx_buffer;
 	union igc_adv_tx_desc *tx_desc;
@@ -843,8 +850,8 @@ static void igc_configure(struct igc_adapter *adapter)
 	igc_setup_tctl(adapter);
 	igc_setup_rctl(adapter);
 
-	igc_configure_tx_ring(adapter, adapter->tx_ring);
-	igc_configure_rx_ring(adapter, adapter->rx_ring);
+	igc_configure_tx_ring(adapter);
+	igc_configure_rx_ring(adapter);
 
 	igc_rx_fifo_flush_base(&adapter->hw);
 
@@ -852,8 +859,7 @@ static void igc_configure(struct igc_adapter *adapter)
 	 * at least 1 descriptor unused to make sure
 	 * next_to_use != next_to_clean
 	 */
-	struct igc_ring *ring = adapter->rx_ring;
-	igc_alloc_rx_buffers(adapter, ring, igc_desc_unused(ring));
+	igc_alloc_rx_buffers(adapter, igc_desc_unused(&adapter->rx_ring));
 }
 
 /**
@@ -903,121 +909,6 @@ static void igc_irq_disable(struct igc_adapter *adapter)
 	wrfl();
 }
 
-static void igc_reset_q_vector(struct igc_adapter *adapter)
-{
-	adapter->tx_ring = NULL;
-	adapter->rx_ring = NULL;
-}
-
-static void igc_reset_interrupt_capability(struct igc_adapter *adapter)
-{
-	//pci_disable_msi(adapter->pdev);
-	igc_reset_q_vector(adapter);
-}
-
-static int igc_alloc_q_vector(struct igc_adapter *adapter, unsigned int txr_count, unsigned int rxr_count)
-{
-	struct igc_q_vector *q_vector;
-	struct igc_ring *ring;
-	int ring_count = txr_count + rxr_count;
-
-	#define struct_size(p, member, n) (sizeof(*(p)) + sizeof(*(p)->member)*n)
-
-	/* allocate q_vector and rings */
-	q_vector = adapter->q_vector[0];
-	if (!q_vector)
-		q_vector = malloc(struct_size(q_vector, ring, ring_count));
-	
-	memset(q_vector, 0, struct_size(q_vector, ring, ring_count));
-	if (!q_vector)
-		return -1;
-
-	/* tie q_vector and adapter together */
-	adapter->q_vector[0] = q_vector;
-	q_vector->adapter = adapter;
-
-	/* initialize pointer to rings */
-	ring = q_vector->ring;
-
-	if (txr_count) {
-		/* configure backlink on ring */
-		ring->q_vector = q_vector;
-
-		/* update q_vector Tx values */
-		q_vector->tx.ring = ring;
-
-		/* apply Tx specific ring traits */
-		ring->count = IGC_DEFAULT_TXD;
-
-		/* assign ring to adapter */
-		adapter->tx_ring = ring;
-
-		/* push pointer to next ring */
-		ring++;
-	}
-
-	if (rxr_count) {
-		/* configure backlink on ring */
-		ring->q_vector = q_vector;
-
-		/* update q_vector Rx values */
-		q_vector->rx.ring = ring;
-
-		/* apply Rx specific ring traits */
-		ring->count = IGC_DEFAULT_RXD;
-
-		/* assign ring to adapter */
-		adapter->rx_ring = ring;
-	}
-
-	return 0;
-}
-
-/**
- * igc_init_interrupt_scheme - initialize interrupts, allocate queues/vectors
- * @adapter: Pointer to adapter structure
- *
- * This function initializes the interrupts and allocates all of the queues.
- */
-static int igc_init_interrupt_scheme(struct igc_adapter *adapter)
-{
-	//pci_enable_msi(adapter->pdev);
-
-	int err = igc_alloc_q_vector(adapter, 1, 1);
-	if (err) {
-		printf("igc driver: error: Unable to allocate memory for vectors\n");
-		goto err_alloc_q_vectors;
-	}
-	return 0;
-
-err_alloc_q_vectors:
-	igc_reset_interrupt_capability(adapter);
-	return err;
-}
-
-/**
- * igc_sw_init - Initialize general software structures (struct igc_adapter)
- * @adapter: board private structure to initialize
- *
- * igc_sw_init initializes the Adapter private data structure.
- * Fields are initialized based on PCI device information and
- * OS network device settings (MTU size).
- */
-static int igc_sw_init(struct igc_adapter *adapter)
-{
-	if (igc_init_interrupt_scheme(adapter)) {
-		printf("igc driver: error: Unable to allocate memory for queues\n");
-		return -1;
-	}
-
-	/* Explicitly disable IRQ since the NIC can be in any state. */
-	igc_irq_disable(adapter);
-
-	adapter->state_down = true;
-
-	return 0;
-}
-
 /**
  * igc_down - Close the interface
  * @adapter: board private structure
@@ -1047,23 +938,9 @@ void igc_down(struct igc_adapter *adapter)
 	adapter->link_speed = 0;
 	adapter->link_duplex = 0;
 
-	igc_disable_tx_ring(adapter->tx_ring);
-	igc_clean_tx_ring(adapter->tx_ring);
-	igc_clean_rx_ring(adapter->rx_ring);
-}
-
-static void igc_clear_interrupt_scheme(struct igc_adapter *adapter)
-{
-	igc_reset_q_vector(adapter);
-	
-	struct igc_q_vector *q_vector = adapter->q_vector[0];
-
-	adapter->q_vector[0] = NULL;
-
-	if (q_vector)
-		free(q_vector);
-
-	igc_reset_interrupt_capability(adapter);
+	igc_disable_tx_ring(adapter);
+	igc_clean_tx_ring(adapter);
+	igc_clean_rx_ring(adapter);
 }
 
 static void igc_watchdog_task_update_link(struct igc_adapter *adapter)
@@ -1169,17 +1046,17 @@ int igc_open(struct igc_adapter *adapter)
 	struct igc_hw *hw = &adapter->hw;
 	int err = 0;
 
-	err = igc_setup_tx_resources(adapter, adapter->tx_ring);
+	err = igc_setup_tx_resources(adapter);
 	if (err) {
 		printf("Error during Tx queue setup\n");
-		igc_free_tx_resources(adapter->tx_ring);
+		igc_free_tx_resources(adapter);
 		goto err_setup_tx;
 	}
 
-	err = igc_setup_rx_resources(adapter, adapter->rx_ring);
+	err = igc_setup_rx_resources(adapter);
 	if (err) {
 		printf("Error during Rx queue setup\n");
-		igc_free_rx_resources(adapter->rx_ring);
+		igc_free_rx_resources(adapter);
 		goto err_setup_rx;
 	}
 
@@ -1196,13 +1073,10 @@ int igc_open(struct igc_adapter *adapter)
 	wr32(IGC_EITR(0), (IGC_ITR_USECS & IGC_QVECTOR_MASK) | IGC_EITR_CNT_IGNR); // set interrupt throttle rate
 	igc_irq_enable(adapter);
 
-	/* check link status */
-	igc_watchdog_task_update_link(adapter); // todo: is this doing anything?
-
 	return IGC_SUCCESS;
 
 err_setup_rx:
-	igc_free_tx_resources(adapter->tx_ring);
+	igc_free_tx_resources(adapter);
 err_setup_tx:
 	igc_reset(adapter, false);
 
@@ -1213,8 +1087,8 @@ int igc_close(struct igc_adapter *adapter)
 {
 	igc_down(adapter);
 	igc_release_hw_control(adapter);
-	igc_free_tx_resources(adapter->tx_ring);
-	igc_free_rx_resources(adapter->rx_ring);
+	igc_free_tx_resources(adapter);
+	igc_free_rx_resources(adapter);
 	return 0;
 }
 
@@ -1223,7 +1097,7 @@ int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr)
 	int err;
 	struct igc_hw *hw = &adapter->hw;
 
-	adapter->fd = fd;
+	adapter->fd      = fd;
 	adapter->io_addr = io_addr;
 	hw->hw_addr      = io_addr;
 
@@ -1236,10 +1110,16 @@ int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr)
 	if (err)
 		goto err_sw_init;
 
-	/* setup the private structure */
-	err = igc_sw_init(adapter);
-	if (err)
-		goto err_sw_init;
+	//pci_enable_msi(adapter->pdev);
+
+	// init the rings
+	adapter->tx_ring.count = IGC_DEFAULT_TXD;
+	adapter->rx_ring.count = IGC_DEFAULT_RXD;
+
+	/* Explicitly disable IRQ since the NIC can be in any state. */
+	igc_irq_disable(adapter);
+
+	adapter->state_down = true;
 
 	/* before reading the NVM, reset the controller to put the device in a
 	 * known good starting state
@@ -1274,7 +1154,7 @@ err_eeprom:
 	if (!igc_check_reset_block(hw))
 		igc_reset_phy(hw);
 err_sw_init:
-	igc_clear_interrupt_scheme(adapter);
+	//pci_disable_msi(adapter->pdev);
 	return err;
 }
 
@@ -1286,6 +1166,6 @@ void igc_remove(struct igc_adapter *adapter)
 	 * would have already happened in close and is redundant.
 	 */
 	igc_release_hw_control(adapter);
-	igc_clear_interrupt_scheme(adapter);
+	//pci_disable_msi(adapter->pdev);
 }
 

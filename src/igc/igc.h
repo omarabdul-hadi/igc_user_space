@@ -26,15 +26,7 @@
 #include "igc_hw.h"
 #include "./../atemsys/atemsys.h"
 
-/* Transmit and receive queues */
-#define MAX_Q_VECTORS			8
-
-struct igc_ring_container {
-	struct igc_ring *ring;          /* pointer to linked list of rings */
-};
-
 struct igc_ring {
-	struct igc_q_vector *q_vector;  /* backlink to q_vector */
 	union {                         /* array of buffer info structs */
 		struct igc_tx_buffer *tx_buffer_info;
 		struct igc_rx_buffer *rx_buffer_info;
@@ -57,8 +49,8 @@ struct igc_adapter {
 
 	bool state_down;
 
-	struct igc_ring *tx_ring;
-	struct igc_ring *rx_ring;
+	struct igc_ring tx_ring;
+	struct igc_ring rx_ring;
 
 	bool link;
 	uint16_t link_speed;
@@ -66,8 +58,6 @@ struct igc_adapter {
 
 	uint8_t *io_addr;
 	struct igc_hw hw;
-
-	struct igc_q_vector *q_vector[MAX_Q_VECTORS];
 };
 
 int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr);
@@ -130,9 +120,6 @@ static inline __le32 igc_test_staterr(union igc_adv_rx_desc *rx_desc,
 	return rx_desc->wb.upper.status_error & cpu_to_le32(stat_err_bits);
 }
 
-/* wrapper around a pointer to a socket buffer,
- * so a DMA handle can be stored along with the buffer
- */
 struct igc_tx_buffer {
 	union igc_adv_tx_desc *next_to_watch;
 	void* data;
@@ -144,15 +131,6 @@ struct igc_tx_buffer {
 struct igc_rx_buffer {
 	uint64_t dma;
 	void *page;
-};
-
-struct igc_q_vector {
-	struct igc_adapter *adapter;    /* backlink */
-
-	struct igc_ring_container rx, tx;
-
-	/* for dynamic allocation of rings associated with this q_vector */
-	struct igc_ring ring[];
 };
 
 /* igc_desc_unused - calculate if we have unused descriptors */
