@@ -72,21 +72,10 @@ void igc_remove(struct igc_adapter *adapter);
 #define IGC_ITR_USECS	10  // interrupt latency in us, min 10, max 10000, we set it to 10 to reduce it by maximum amount
 
 /* TX/RX descriptor defines */
-#define IGC_DEFAULT_TXD		256
-#define IGC_DEFAULT_TX_WORK	128
-#define IGC_MIN_TXD		64
-#define IGC_MAX_TXD		4096
+#define IGC_DEFAULT_TXD		8 // original code documentation stated min is 64, but 8 seems to be the hard limit
+#define IGC_DEFAULT_RXD		8 // original code documentation stated min is 64, but 8 seems to be the hard limit
 
-#define IGC_DEFAULT_RXD		256
-#define IGC_MIN_RXD		64
-#define IGC_MAX_RXD		4096
-
-/* Supported Rx Buffer Sizes */
-#define IGC_RXBUFFER_256		256
-#define IGC_RXBUFFER_2048		2048
-#define IGC_RXBUFFER_3072		3072
-
-#define IGC_RX_HDR_LEN			IGC_RXBUFFER_256
+#define IGC_RX_HDR_LEN			256
 
 /* RX and TX descriptor control thresholds.
  * PTHRESH - MAC will consider prefetch if it has fewer than this number of
@@ -111,14 +100,6 @@ void igc_remove(struct igc_adapter *adapter);
 
 /* How many Rx Buffers do we bundle into one write to the hardware ? */
 #define IGC_RX_BUFFER_WRITE	16 /* Must be power of 2 */
-
-
-/* igc_test_staterr - tests bits within Rx descriptor status and error fields */
-static inline __le32 igc_test_staterr(union igc_adv_rx_desc *rx_desc,
-				      const uint32_t stat_err_bits)
-{
-	return rx_desc->wb.upper.status_error & cpu_to_le32(stat_err_bits);
-}
 
 struct igc_tx_buffer {
 	union igc_adv_tx_desc *next_to_watch;
@@ -165,8 +146,6 @@ static inline int32_t igc_read_phy_reg(struct igc_hw *hw, uint32_t offset, uint1
 
 	return -1;
 }
-
-#define IGC_TXD_DCMD	(IGC_ADVTXD_DCMD_EOP | IGC_ADVTXD_DCMD_RS)
 
 #define IGC_RX_DESC(R, i)       \
 	(&(((union igc_adv_rx_desc *)((R)->desc))[i]))

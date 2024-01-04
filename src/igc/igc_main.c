@@ -103,12 +103,6 @@ static void igc_get_hw_control(struct igc_adapter *adapter)
 	     ctrl_ext | IGC_CTRL_EXT_DRV_LOAD);
 }
 
-static void igc_unmap_tx_buffer(struct igc_tx_buffer *buf)
-{
-	atemsys_unmap_mem(buf->data, buf->len);
-	buf->len = 0;
-}
-
 /**
  * igc_clean_tx_ring - Free Tx Buffers
  * @tx_ring: ring to be cleaned
@@ -120,33 +114,9 @@ static void igc_clean_tx_ring(struct igc_adapter *adapter)
 	struct igc_tx_buffer *tx_buffer = &tx_ring->tx_buffer_info[i];
 
 	while (i != tx_ring->next_to_use) {
-		union igc_adv_tx_desc *eop_desc, *tx_desc;
-
-		igc_unmap_tx_buffer(tx_buffer);
-
-		/* check for eop_desc to determine the end of the packet */
-		eop_desc = tx_buffer->next_to_watch;
-		tx_desc = IGC_TX_DESC(tx_ring, i);
-
-		/* unmap remaining buffers */
-		while (tx_desc != eop_desc) {
-			tx_buffer++;
-			tx_desc++;
-			i++;
-			if (unlikely(i == tx_ring->count)) {
-				i = 0;
-				tx_buffer = tx_ring->tx_buffer_info;
-				tx_desc = IGC_TX_DESC(tx_ring, 0);
-			}
-
-			/* unmap any remaining paged data */
-			if (tx_buffer->len)
-				igc_unmap_tx_buffer(tx_buffer);
-		}
-
+		atemsys_unmap_mem(tx_buffer->data, tx_buffer->len);
+		tx_buffer->len = 0;
 		tx_buffer->next_to_watch = NULL;
-
-		/* move us one more past the eop_desc for start of next pkt */
 		tx_buffer++;
 		i++;
 		if (unlikely(i == tx_ring->count)) {
@@ -356,7 +326,7 @@ static void igc_configure_rx_ring(struct igc_adapter *adapter)
 	rx_ring->next_to_clean = 0;
 	rx_ring->next_to_use = 0;
 
-	buf_size = IGC_RXBUFFER_2048;
+	buf_size = PAGE_SIZE;
 
 	srrctl = rd32(IGC_SRRCTL);
 	srrctl &= ~(IGC_SRRCTL_BSIZEPKT_MASK | IGC_SRRCTL_BSIZEHDR_MASK |
@@ -483,7 +453,17 @@ void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len)
 {
 	struct igc_hw *hw = &adapter->hw;
 	struct igc_ring *tx_ring = &adapter->tx_ring;
-	struct igc_tx_buffer *first;
+	uint16_t i = tx_ring->next_to_use;
+	struct igc_tx_buffer *tx_buffer = &tx_ring->tx_buffer_info[i];
+	union igc_adv_tx_desc *tx_desc = IGC_TX_DESC(tx_ring, i);
+	void* mem_ptr = atemsys_map_dma(adapter->fd, len);
+	uint64_t dma = atemsys_get_dma_addr(mem_ptr);
+	uint32_t cmd_type = len                  | /* write last descriptor with RS and EOP bits */
+	                    IGC_ADVTXD_DCMD_EOP  |
+						IGC_ADVTXD_DCMD_RS   |
+	                    IGC_ADVTXD_DTYP_DATA | /* set type for advanced descriptor with frame checksum insertion */
+	                    IGC_ADVTXD_DCMD_DEXT | 
+			            IGC_ADVTXD_DCMD_IFCS;
 
 	static int iii = 0;
 	if (iii < 12)
@@ -492,42 +472,7 @@ void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len)
 		print_debug_packet(data, len);
 		iii++;
 	}
-
-	/* record the location of the first descriptor for this packet */
-	first = &tx_ring->tx_buffer_info[tx_ring->next_to_use];
-
-	struct igc_tx_buffer *tx_buffer;
-	union igc_adv_tx_desc *tx_desc;
-	uint16_t i = tx_ring->next_to_use;
-	void* mem_ptr;
-	uint64_t dma;
-	uint32_t cmd_type;
-
-	/* set type for advanced descriptor with frame checksum insertion */
-	cmd_type = IGC_ADVTXD_DTYP_DATA | IGC_ADVTXD_DCMD_DEXT | IGC_ADVTXD_DCMD_IFCS;
-	tx_desc = IGC_TX_DESC(tx_ring, i);
 	tx_desc->read.olinfo_status = cpu_to_le32(len << IGC_ADVTXD_PAYLEN_SHIFT);
-
-	// struct timeval  bgn, end;
-	// static int iii = 0;
-	// if (iii < 1000)
-	// {
-	// 	gettimeofday(&bgn, NULL);
-	// }
-	mem_ptr = atemsys_map_dma(adapter->fd, len);
-	// if (iii < 1000)
-	// {
-	// 	gettimeofday(&end, NULL);
-	// 	printf ("Total time = %li us\n", (end.tv_usec - bgn.tv_usec) + 1000000 * (end.tv_sec - bgn.tv_sec));
-	// 	iii++;
-	// }
-
-	tx_buffer = first;
-
-	if (!mem_ptr)
-		goto dma_error;
-
-	dma = atemsys_get_dma_addr(mem_ptr);
 
 	/* record length, and DMA address */
 	tx_buffer->data = mem_ptr;
@@ -536,13 +481,10 @@ void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len)
 	memcpy(mem_ptr, data, len);
 
 	tx_desc->read.buffer_addr = cpu_to_le64(dma);
-
-	/* write last descriptor with RS and EOP bits */
-	cmd_type |= first->len | IGC_TXD_DCMD;
 	tx_desc->read.cmd_type_len = cpu_to_le32(cmd_type);
 
 	/* set next_to_watch value indicating a packet is present */
-	first->next_to_watch = tx_desc;
+	tx_buffer->next_to_watch = tx_desc;
 
 	i++;
 	if (i == tx_ring->count)
@@ -550,28 +492,6 @@ void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len)
 
 	tx_ring->next_to_use = i;
 	wr32(IGC_TDT, i);
-
-	goto exit;
-dma_error:
-	printf("igc driver: error: TX DMA map failed\n");
-	tx_buffer = &tx_ring->tx_buffer_info[i];
-
-	/* clear dma mappings for failed tx_buffer_info map */
-	while (tx_buffer != first) {
-		if (tx_buffer->len)
-			igc_unmap_tx_buffer(tx_buffer);
-
-		if (i-- == 0)
-			i += tx_ring->count;
-		tx_buffer = &tx_ring->tx_buffer_info[i];
-	}
-
-	if (tx_buffer->len)
-		igc_unmap_tx_buffer(tx_buffer);
-
-	tx_ring->next_to_use = i;
-
-exit:
 }
 
 static void igc_disable_vlan(struct igc_adapter *adapter)
@@ -580,58 +500,6 @@ static void igc_disable_vlan(struct igc_adapter *adapter)
 	uint32_t ctrl = rd32(IGC_CTRL);
 	ctrl &= ~IGC_CTRL_VME;      // disable VLAN tag insert/strip
 	wr32(IGC_CTRL, ctrl);
-}
-
-/**
- * igc_reuse_rx_page - page flip buffer and store it back on the ring
- * @rx_ring: rx descriptor ring to store buffers on
- * @old_buff: donor buffer to have page reused
- *
- * Synchronizes page for reuse by the adapter
- */
-static void igc_reuse_rx_page(struct igc_ring *rx_ring,
-			      struct igc_rx_buffer *old_buff)
-{
-	uint16_t nta = rx_ring->next_to_alloc;
-	struct igc_rx_buffer *new_buff; 
-
-	new_buff = &rx_ring->rx_buffer_info[nta];
-
-	/* update, and store next to alloc */
-	nta++;
-	rx_ring->next_to_alloc = (nta < rx_ring->count) ? nta : 0;
-
-	/* Transfer page from old buffer to new buffer.
-	 * Move each member individually to avoid possible store
-	 * forwarding stalls.
-	 */
-	new_buff->dma		= old_buff->dma;
-	new_buff->page		= old_buff->page;
-}
-
-/**
- * igc_is_non_eop - process handling of non-EOP buffers
- * @rx_ring: Rx ring being processed
- * @rx_desc: Rx descriptor for current buffer
- *
- * This function updates next to clean.  If the buffer is an EOP buffer
- * this function exits returning false, otherwise it will place the
- * sk_buff in the next buffer to be chained and return true indicating
- * that this is in fact a non-EOP buffer.
- */
-static bool igc_is_non_eop(struct igc_ring *rx_ring,
-			   union igc_adv_rx_desc *rx_desc)
-{
-	uint32_t ntc = rx_ring->next_to_clean + 1;
-
-	/* fetch, update, and store next to clean */
-	ntc = (ntc < rx_ring->count) ? ntc : 0;
-	rx_ring->next_to_clean = ntc;
-
-	if (likely(igc_test_staterr(rx_desc, IGC_RXD_STAT_EOP)))
-		return false;
-
-	return true;
 }
 
 static bool igc_alloc_mapped_page(struct igc_adapter *adapter, struct igc_ring *rx_ring,
@@ -728,12 +596,6 @@ static void igc_clean_rx_irq(struct igc_adapter *adapter)
 		unsigned int size;
 		void *pktbuf;
 
-		/* return some buffers to hardware, one at a time is too slow */
-		if (cleaned_count >= IGC_RX_BUFFER_WRITE) {
-			igc_alloc_rx_buffers(adapter, cleaned_count);
-			cleaned_count = 0;
-		}
-
 		rx_desc = IGC_RX_DESC(rx_ring, rx_ring->next_to_clean);
 		size = le16_to_cpu(rx_desc->wb.upper.length);
 		if (!size)
@@ -751,13 +613,16 @@ static void igc_clean_rx_irq(struct igc_adapter *adapter)
 			iii++;
 		}
 
-		igc_reuse_rx_page(rx_ring, rx_buffer);
-	    rx_buffer->page = NULL;
-		cleaned_count++;
+		// reuse old buffer
+		struct igc_rx_buffer *new_buff = &rx_ring->rx_buffer_info[rx_ring->next_to_alloc];
+		new_buff->dma  = rx_buffer->dma;
+		new_buff->page = rx_buffer->page;
+		rx_buffer->page = NULL;
 
-		/* fetch next buffer in frame if non-eop */
-		if (igc_is_non_eop(rx_ring, rx_desc))
-			continue;
+		rx_ring->next_to_alloc = (rx_ring->next_to_alloc + 1) % rx_ring->count;
+		rx_ring->next_to_clean = (rx_ring->next_to_clean + 1) % rx_ring->count;
+
+		cleaned_count++;
 	}
 
 	if (cleaned_count)
@@ -789,29 +654,11 @@ static void igc_clean_tx_irq(struct igc_adapter *adapter)
 		if (!(eop_desc->wb.status & cpu_to_le32(IGC_TXD_STAT_DD)))
 			break;
 
-		/* clear next_to_watch to prevent false hangs */
+		atemsys_unmap_mem(tx_buffer->data, tx_buffer->len);
+		tx_buffer->len = 0;
 		tx_buffer->next_to_watch = NULL;
-
-		igc_unmap_tx_buffer(tx_buffer);
-
-		/* clear last DMA location and unmap remaining buffers */
-		while (tx_desc != eop_desc) {
-			tx_buffer++;
-			tx_desc++;
-			i++;
-			if (unlikely(!i)) {
-				i -= tx_ring->count;
-				tx_buffer = tx_ring->tx_buffer_info;
-				tx_desc = IGC_TX_DESC(tx_ring, 0);
-			}
-
-			/* unmap any remaining paged data */
-			if (tx_buffer->len)
-				igc_unmap_tx_buffer(tx_buffer);
-		}
-
-		/* move us one more past the eop_desc for start of next pkt */
 		tx_buffer++;
+
 		tx_desc++;
 		i++;
 		if (unlikely(!i)) {
@@ -943,7 +790,7 @@ void igc_down(struct igc_adapter *adapter)
 	igc_clean_rx_ring(adapter);
 }
 
-static void igc_watchdog_task_update_link(struct igc_adapter *adapter)
+static void igc_update_link(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
 	uint16_t phy_data, retry_count = 20;
@@ -1017,7 +864,7 @@ void igc_intr_msi(struct igc_adapter *adapter)
 	if (icr & (IGC_ICR_RXSEQ | IGC_ICR_LSC)) {
 		printf("Link status change interrupt\n");
 		if (!adapter->state_down)
-			igc_watchdog_task_update_link(adapter);
+			igc_update_link(adapter);
 	}
 
 	// struct timeval  bgn, end;

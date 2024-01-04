@@ -14,3 +14,6 @@ cd "../../"
 make clean                          # clean
 make                                # compile
 sudo ./igc_user_space               # run
+
+# remove atemsys kernel module
+sudo rmmod atemsys 
