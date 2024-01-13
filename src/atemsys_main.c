@@ -59,9 +59,9 @@ void* atemsys_map_io(int fd, ATEMSYS_T_PCI_SELECT_DESC* pci_device_descriptor) {
 	return io_addr;
 }
 
-void* atemsys_map_dma(int fd, uint32_t size) {
-	void* allocated_mem_ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, 0);
-    //printf("allocated_mem_ptr is 0x%lx\n", (uint64_t) allocated_mem_ptr);
+void* atemsys_map_dma(int fd, uint32_t size, int prot) {
+	void* allocated_mem_ptr = mmap(0, size, prot, MAP_SHARED | MAP_LOCKED, fd, 0);
+    //printf("allocated_mem_ptr is 0x%lx,  prot %i\n", (uint64_t) allocated_mem_ptr, prot);
 	return allocated_mem_ptr;
 }
 

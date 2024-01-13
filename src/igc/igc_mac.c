@@ -154,7 +154,7 @@ out:
  */
 int32_t igc_force_mac_fc(struct igc_hw *hw)
 {
-	printf("igc driver: force turn off flow control\n");
+	printf("igc driver: turn off flow control\n");
 
 	uint32_t ctrl = rd32(IGC_CTRL);
 	ctrl &= (~(IGC_CTRL_TFCE | IGC_CTRL_RFCE));

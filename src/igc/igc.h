@@ -8,7 +8,6 @@
 #define cpu_to_le32
 #define cpu_to_le64
 #define le16_to_cpu
-#define PAGE_SIZE     4096
 #define BITS_PER_LONG   64
 
 #define GENMASK(h, l) \
@@ -63,17 +62,17 @@ struct igc_adapter {
 int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr);
 int igc_open(struct igc_adapter *adapter);
 int igc_close(struct igc_adapter *adapter);
-void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len);
-void igc_intr_msi(struct igc_adapter *adapter);
+void igc_send_frame(struct igc_adapter *adapter, uint8_t* data, int len);
+int igc_intr_msi(struct igc_adapter *adapter, uint8_t* receive_pkt);
 void igc_remove(struct igc_adapter *adapter);
 
-
 /* Interrupt defines */
-#define IGC_ITR_USECS	10  // interrupt latency in us, min 10, max 10000, we set it to 10 to reduce it by maximum amount
+#define IGC_ITR_USECS	100  // interrupt throttle rate, min 10, max 10000, 100 seems to yield the lowest latency when Tx Rx cycle is about 125 us
+                             // this value vaguely translates to latency in us between interrupts
 
 /* TX/RX descriptor defines */
-#define IGC_DEFAULT_TXD		8 // original code documentation stated min is 64, but 8 seems to be the hard limit
-#define IGC_DEFAULT_RXD		8 // original code documentation stated min is 64, but 8 seems to be the hard limit
+#define IGC_DEFAULT_TXD		64 // original code documentation stated min is 64, but 8 seems to be the hard limit
+#define IGC_DEFAULT_RXD		64 // original code documentation stated min is 64, but 8 seems to be the hard limit
 
 #define IGC_RX_HDR_LEN			256
 
@@ -95,23 +94,18 @@ void igc_remove(struct igc_adapter *adapter);
 #define IGC_RX_WTHRESH			4
 #define IGC_TX_WTHRESH			16
 
-#define IGC_RX_DMA_ATTR \
-	(DMA_ATTR_SKIP_CPU_SYNC | DMA_ATTR_WEAK_ORDERING)
-
-/* How many Rx Buffers do we bundle into one write to the hardware ? */
-#define IGC_RX_BUFFER_WRITE	16 /* Must be power of 2 */
+#define TX_BUFF_SIZE 2048
+#define RX_BUFF_SIZE 2048
 
 struct igc_tx_buffer {
 	union igc_adv_tx_desc *next_to_watch;
 	void* data;
-
 	uint64_t dma;
-	uint32_t len;
 };
 
 struct igc_rx_buffer {
+	void *data;
 	uint64_t dma;
-	void *page;
 };
 
 /* igc_desc_unused - calculate if we have unused descriptors */

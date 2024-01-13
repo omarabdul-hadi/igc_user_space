@@ -14,30 +14,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/mman.h>
 
 #include "./../atemsys_main.h"
 #include "igc.h"
-
-void print_debug_packet(uint8_t* data, int size){
-	printf("%02x %02x %02x %02x %02x %02x %02x %02x  %02x %02x %02x %02x %02x %02x %02x %02x \n",
-	*(data +  0), *(data +  1), *(data +  2), *(data +  3), *(data +  4),
-	*(data +  5), *(data +  6), *(data +  7), *(data +  8), *(data +  9),
-	*(data + 10), *(data + 11), *(data + 12), *(data + 13), *(data + 14),
-	*(data + 15));
-
-	printf("%02x %02x %02x %02x %02x %02x %02x %02x  %02x %02x %02x %02x %02x %02x %02x %02x \n",
-	*(data + 16), *(data + 17), *(data + 18), *(data + 19), *(data + 20),
-	*(data + 21), *(data + 22), *(data + 23), *(data + 24), *(data + 25),
-	*(data + 26), *(data + 27), *(data + 28), *(data + 29), *(data + 30),
-	*(data + 31));
-
-	printf("%02x %02x %02x %02x %02x %02x %02x %02x \n",
-	*(data + 32), *(data + 33), *(data + 34), *(data + 35), *(data + 36),
-	*(data + 37), *(data + 38), *(data + 39));
-
-	printf("size: %d \n", size);
-	printf("\n");
-}
 
 void igc_reset(struct igc_adapter *adapter, bool power_down_phy)
 {
@@ -54,10 +34,6 @@ void igc_reset(struct igc_adapter *adapter, bool power_down_phy)
 	igc_get_phy_info(hw);
 }
 
-/**
- * igc_power_up_link - Power up the phy link
- * @adapter: address of board private structure
- */
 static void igc_power_up_link(struct igc_adapter *adapter)
 {
 	igc_reset_phy(&adapter->hw);
@@ -103,26 +79,14 @@ static void igc_get_hw_control(struct igc_adapter *adapter)
 	     ctrl_ext | IGC_CTRL_EXT_DRV_LOAD);
 }
 
-/**
- * igc_clean_tx_ring - Free Tx Buffers
- * @tx_ring: ring to be cleaned
- */
 static void igc_clean_tx_ring(struct igc_adapter *adapter)
 {
 	struct igc_ring *tx_ring = &adapter->tx_ring;
-	uint16_t i = tx_ring->next_to_clean;
-	struct igc_tx_buffer *tx_buffer = &tx_ring->tx_buffer_info[i];
+	struct igc_tx_buffer *tx_buffer;
 
-	while (i != tx_ring->next_to_use) {
-		atemsys_unmap_mem(tx_buffer->data, tx_buffer->len);
-		tx_buffer->len = 0;
-		tx_buffer->next_to_watch = NULL;
-		tx_buffer++;
-		i++;
-		if (unlikely(i == tx_ring->count)) {
-			i = 0;
-			tx_buffer = tx_ring->tx_buffer_info;
-		}
+	for (int i = 0; i < tx_ring->count; i++) {
+		tx_buffer = &tx_ring->tx_buffer_info[i];
+		atemsys_unmap_mem(tx_buffer->data, TX_BUFF_SIZE);
 	}
 
 	/* Zero out the buffer ring */
@@ -147,12 +111,6 @@ void igc_disable_tx_ring(struct igc_adapter *adapter)
 	wr32(IGC_TXDCTL, txdctl);
 }
 
-/**
- * igc_free_tx_resources - Free Tx Resources per Queue
- * @tx_ring: Tx descriptor ring for a specific queue
- *
- * Free all transmit software resources
- */
 void igc_free_tx_resources(struct igc_adapter *adapter)
 {
 	struct igc_ring *tx_ring = &adapter->tx_ring;
@@ -172,12 +130,6 @@ void igc_free_tx_resources(struct igc_adapter *adapter)
 	tx_ring->desc = NULL;
 }
 
-/**
- * igc_setup_tx_resources - allocate Tx resources (Descriptors)
- * @tx_ring: tx descriptor ring (for a specific queue) to setup
- *
- * Return 0 on success, negative on failure
- */
 int igc_setup_tx_resources(struct igc_adapter *adapter)
 {
 	struct igc_ring *tx_ring = &adapter->tx_ring;
@@ -190,7 +142,7 @@ int igc_setup_tx_resources(struct igc_adapter *adapter)
 	memset(tx_ring->tx_buffer_info, 0, size);
 
 	tx_ring->size = tx_ring->count * sizeof(union igc_adv_tx_desc);
-	tx_ring->desc = atemsys_map_dma(adapter->fd, tx_ring->size);
+	tx_ring->desc = atemsys_map_dma(adapter->fd, tx_ring->size, PROT_READ | PROT_WRITE);
     
 	if (!tx_ring->desc)
 		goto err;
@@ -200,6 +152,13 @@ int igc_setup_tx_resources(struct igc_adapter *adapter)
 	tx_ring->next_to_use = 0;
 	tx_ring->next_to_clean = 0;
 
+
+	for (int i = 0; i < tx_ring->count; i++) {
+		struct igc_tx_buffer *tx_buffer = &tx_ring->tx_buffer_info[i];
+		tx_buffer->data = atemsys_map_dma(adapter->fd, TX_BUFF_SIZE, PROT_WRITE);
+		tx_buffer->dma  = atemsys_get_dma_addr(tx_buffer->data);
+	}
+
 	return 0;
 
 err:
@@ -208,10 +167,6 @@ err:
 	return -1;
 }
 
-/**
- * igc_clean_rx_ring - Free Rx Buffers per Queue
- * @ring: ring to free buffers from
- */
 static void igc_clean_rx_ring(struct igc_adapter *adapter)
 {
 	struct igc_ring *rx_ring = &adapter->rx_ring;
@@ -220,7 +175,7 @@ static void igc_clean_rx_ring(struct igc_adapter *adapter)
 	while (i != rx_ring->next_to_alloc) {
 		struct igc_rx_buffer *buffer_info = &rx_ring->rx_buffer_info[i];
 
-		atemsys_unmap_mem(buffer_info->page, PAGE_SIZE);
+		atemsys_unmap_mem(buffer_info->data, RX_BUFF_SIZE);
 
 		i++;
 		if (i == rx_ring->count)
@@ -232,12 +187,6 @@ static void igc_clean_rx_ring(struct igc_adapter *adapter)
 	rx_ring->next_to_use = 0;
 }
 
-/**
- * igc_free_rx_resources - Free Rx Resources
- * @rx_ring: ring to clean the resources from
- *
- * Free all receive software resources
- */
 void igc_free_rx_resources(struct igc_adapter *adapter)
 {
 	struct igc_ring *rx_ring = &adapter->rx_ring;
@@ -255,11 +204,6 @@ void igc_free_rx_resources(struct igc_adapter *adapter)
 	rx_ring->desc = NULL;
 }
 
-/**
- * igc_setup_rx_resources - allocate Rx resources (Descriptors)
- *
- * Returns 0 on success, negative on failure
- */
 int igc_setup_rx_resources(struct igc_adapter *adapter)
 {
 	struct igc_ring *rx_ring = &adapter->rx_ring;
@@ -271,7 +215,7 @@ int igc_setup_rx_resources(struct igc_adapter *adapter)
 	memset(rx_ring->rx_buffer_info, 0, size);
 
 	rx_ring->size = sizeof(union igc_adv_rx_desc) * rx_ring->count;
-	rx_ring->desc = atemsys_map_dma(adapter->fd, rx_ring->size);
+	rx_ring->desc = atemsys_map_dma(adapter->fd, rx_ring->size, PROT_READ | PROT_WRITE);
 
 	if (!rx_ring->desc)
 		goto err;
@@ -291,13 +235,6 @@ err:
 	return -1;
 }
 
-/**
- * igc_configure_rx_ring - Configure a receive ring after Reset
- * @adapter: board private structure
- * @ring: receive ring to be configured
- *
- * Configure the Rx unit of the MAC after a reset.
- */
 static void igc_configure_rx_ring(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
@@ -305,7 +242,6 @@ static void igc_configure_rx_ring(struct igc_adapter *adapter)
 	union igc_adv_rx_desc *rx_desc;
 	uint32_t srrctl = 0, rxdctl = 0;
 	uint64_t rdba = rx_ring->dma;
-	uint32_t buf_size;
 
 	/* disable the queue */
 	wr32(IGC_RXDCTL, 0);
@@ -326,13 +262,11 @@ static void igc_configure_rx_ring(struct igc_adapter *adapter)
 	rx_ring->next_to_clean = 0;
 	rx_ring->next_to_use = 0;
 
-	buf_size = PAGE_SIZE;
-
 	srrctl = rd32(IGC_SRRCTL);
 	srrctl &= ~(IGC_SRRCTL_BSIZEPKT_MASK | IGC_SRRCTL_BSIZEHDR_MASK |
 		    IGC_SRRCTL_DESCTYPE_MASK);
 	srrctl |= IGC_SRRCTL_BSIZEHDR(IGC_RX_HDR_LEN);
-	srrctl |= IGC_SRRCTL_BSIZEPKT(buf_size);
+	srrctl |= IGC_SRRCTL_BSIZEPKT(RX_BUFF_SIZE);
 	srrctl |= IGC_SRRCTL_DESCTYPE_ADV_ONEBUF;
 
 	wr32(IGC_SRRCTL, srrctl);
@@ -355,13 +289,6 @@ static void igc_configure_rx_ring(struct igc_adapter *adapter)
 	wr32(IGC_RXDCTL, rxdctl);
 }
 
-/**
- * igc_configure_tx_ring - Configure transmit ring after Reset
- * @adapter: board private structure
- * @ring: tx ring to configure
- *
- * Configure a transmit ring after a reset.
- */
 static void igc_configure_tx_ring(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
@@ -449,15 +376,13 @@ static void igc_setup_tctl(struct igc_adapter *adapter)
 	wr32(IGC_TCTL, tctl);
 }
 
-void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len)
+void igc_send_frame(struct igc_adapter *adapter, uint8_t* data, int len)
 {
 	struct igc_hw *hw = &adapter->hw;
 	struct igc_ring *tx_ring = &adapter->tx_ring;
 	uint16_t i = tx_ring->next_to_use;
 	struct igc_tx_buffer *tx_buffer = &tx_ring->tx_buffer_info[i];
 	union igc_adv_tx_desc *tx_desc = IGC_TX_DESC(tx_ring, i);
-	void* mem_ptr = atemsys_map_dma(adapter->fd, len);
-	uint64_t dma = atemsys_get_dma_addr(mem_ptr);
 	uint32_t cmd_type = len                  | /* write last descriptor with RS and EOP bits */
 	                    IGC_ADVTXD_DCMD_EOP  |
 						IGC_ADVTXD_DCMD_RS   |
@@ -465,19 +390,11 @@ void igc_xmit_frame(struct igc_adapter *adapter, uint8_t* data, int len)
 	                    IGC_ADVTXD_DCMD_DEXT | 
 			            IGC_ADVTXD_DCMD_IFCS;
 
-	static int iii = 0;
-	if (iii < 12)
-	{
-		printf("Tx packet:\n");
-		print_debug_packet(data, len);
-		iii++;
-	}
 	tx_desc->read.olinfo_status = cpu_to_le32(len << IGC_ADVTXD_PAYLEN_SHIFT);
 
 	/* record length, and DMA address */
-	tx_buffer->data = mem_ptr;
-	tx_buffer->len = len;
-	tx_buffer->dma = dma;
+	void* mem_ptr = tx_buffer->data;
+	uint64_t dma = tx_buffer->dma;
 	memcpy(mem_ptr, data, len);
 
 	tx_desc->read.buffer_addr = cpu_to_le64(dma);
@@ -502,31 +419,6 @@ static void igc_disable_vlan(struct igc_adapter *adapter)
 	wr32(IGC_CTRL, ctrl);
 }
 
-static bool igc_alloc_mapped_page(struct igc_adapter *adapter, struct igc_ring *rx_ring,
-				  struct igc_rx_buffer *bi)
-{
-	void *page = bi->page;
-	uint64_t dma;
-
-	/* since we are recycling buffers we should seldom need to alloc */
-	if (likely(page))
-		return true;
-
-	/* allocate and map dma rx page */
-	page = atemsys_map_dma(adapter->fd, PAGE_SIZE);
-	if (unlikely(!page)) {
-		printf("igc driver: mem allocation failed\n");
-		return false;
-	}
-
-	dma = atemsys_get_dma_addr(page);
-
-	bi->dma = dma;
-	bi->page = page;
-
-	return true;
-}
-
 /**
  * igc_alloc_rx_buffers - Replace used receive buffers; packet split
  * @rx_ring: rx descriptor ring
@@ -549,8 +441,15 @@ static void igc_alloc_rx_buffers(struct igc_adapter *adapter, uint16_t cleaned_c
 	i -= rx_ring->count;
 
 	do {
-		if (!igc_alloc_mapped_page(adapter, rx_ring, bi))
-			break;
+		/* since we are recycling buffers we should seldom need to alloc */
+		if (unlikely(!bi->data)) {
+			bi->data = atemsys_map_dma(adapter->fd, RX_BUFF_SIZE, PROT_READ);
+			if (unlikely(!bi->data)) {
+				printf("igc driver: mem allocation failed\n");
+				break;
+			}
+			bi->dma = atemsys_get_dma_addr(bi->data);
+		}
 
 		/* Refresh the desc even if buffer_addrs didn't change
 		 * because each write-back erases this info.
@@ -585,97 +484,70 @@ static void igc_alloc_rx_buffers(struct igc_adapter *adapter, uint16_t cleaned_c
 	}
 }
 
-static void igc_clean_rx_irq(struct igc_adapter *adapter)
+uint32_t igc_clean_rx_irq(struct igc_adapter *adapter, uint8_t* receive_pkt)
 {
 	struct igc_ring *rx_ring = &adapter->rx_ring;
 	uint16_t cleaned_count = igc_desc_unused(rx_ring);
+	union igc_adv_rx_desc *rx_desc = IGC_RX_DESC(rx_ring, rx_ring->next_to_clean);
+	struct igc_rx_buffer *rx_buffer = &rx_ring->rx_buffer_info[rx_ring->next_to_clean];
+	uint32_t len = le16_to_cpu(rx_desc->wb.upper.length);
 
-	while (true) {
-		union igc_adv_rx_desc *rx_desc;
-		struct igc_rx_buffer *rx_buffer;
-		unsigned int size;
-		void *pktbuf;
-
-		rx_desc = IGC_RX_DESC(rx_ring, rx_ring->next_to_clean);
-		size = le16_to_cpu(rx_desc->wb.upper.length);
-		if (!size)
-			break;
-
-		rx_buffer = &rx_ring->rx_buffer_info[rx_ring->next_to_clean];
-
-		pktbuf = rx_buffer->page;
-
-		static int iii = 0;
-		if (iii < 12)
-		{
-			printf("Rx packet:\n");
-			print_debug_packet(pktbuf, size);
-			iii++;
-		}
+	if (len) {
+		memcpy(receive_pkt, rx_buffer->data, len);
 
 		// reuse old buffer
 		struct igc_rx_buffer *new_buff = &rx_ring->rx_buffer_info[rx_ring->next_to_alloc];
 		new_buff->dma  = rx_buffer->dma;
-		new_buff->page = rx_buffer->page;
-		rx_buffer->page = NULL;
+		new_buff->data = rx_buffer->data;
+		rx_buffer->data = NULL;
 
 		rx_ring->next_to_alloc = (rx_ring->next_to_alloc + 1) % rx_ring->count;
 		rx_ring->next_to_clean = (rx_ring->next_to_clean + 1) % rx_ring->count;
 
 		cleaned_count++;
 	}
+	else {
+		printf("rxcf\n");
+	}
 
-	if (cleaned_count)
+	if (cleaned_count) {
 		igc_alloc_rx_buffers(adapter, cleaned_count);
+	}
+
+	return len;
 }
 
-static void igc_clean_tx_irq(struct igc_adapter *adapter)
+void igc_clean_tx_irq(struct igc_adapter *adapter)
 {
 	struct igc_ring *tx_ring = &adapter->tx_ring;
-	unsigned int i = tx_ring->next_to_clean;
+	unsigned int ntc = tx_ring->next_to_clean;
 	struct igc_tx_buffer *tx_buffer;
-	union igc_adv_tx_desc *tx_desc;
+	union igc_adv_tx_desc *eop_desc;
 
 	if (adapter->state_down)
 		return;
 
-	tx_buffer = &tx_ring->tx_buffer_info[i];
-	tx_desc = IGC_TX_DESC(tx_ring, i);
-	i -= tx_ring->count;
-
 	while (true) {
-		union igc_adv_tx_desc *eop_desc = tx_buffer->next_to_watch;
+		tx_buffer = &tx_ring->tx_buffer_info[ntc];
+		eop_desc = tx_buffer->next_to_watch;
 
-		/* if next_to_watch is not set then there is no work pending */
-		if (!eop_desc)
+		/* if next_to_watch is set then there is work pending */
+		/* if DD is set, then pending work has been completed */
+		if (eop_desc && (eop_desc->wb.status & cpu_to_le32(IGC_TXD_STAT_DD))) {
+			tx_buffer->next_to_watch = NULL;
+			ntc = (ntc + 1) % tx_ring->count;
+		}
+		else {
 			break;
-
-		/* if DD is not set pending work has not been completed */
-		if (!(eop_desc->wb.status & cpu_to_le32(IGC_TXD_STAT_DD)))
-			break;
-
-		atemsys_unmap_mem(tx_buffer->data, tx_buffer->len);
-		tx_buffer->len = 0;
-		tx_buffer->next_to_watch = NULL;
-		tx_buffer++;
-
-		tx_desc++;
-		i++;
-		if (unlikely(!i)) {
-			i -= tx_ring->count;
-			tx_buffer = tx_ring->tx_buffer_info;
-			tx_desc = IGC_TX_DESC(tx_ring, 0);
 		}
 	}
-
-	i += tx_ring->count;
-	tx_ring->next_to_clean = i;
+	tx_ring->next_to_clean = ntc;
 }
 
 static void igc_set_rx_mode(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
-	uint32_t rctl = 0, rlpml = 0x670; // max frame size determined impirically
+	uint32_t rctl = 0, rlpml = 0x670; // max frame size determined impirically while running igc driver in kernel space
 
 	// use unicast promiscuous and all multicast modes
 	// because no dst or src mac hw filters are being used
@@ -710,28 +582,6 @@ static void igc_configure(struct igc_adapter *adapter)
 }
 
 /**
- * igc_write_ivar - configure ivar for given MSI-X vector
- * @hw: pointer to the HW structure
- * @offset: column offset of in IVAR, should be multiple of 8
- *
- * The IVAR table consists of 2 columns,
- * each containing a cause allocation for an Rx and Tx ring, and a
- * variable number of rows depending on the number of queues supported.
- */
-static void igc_write_ivar(struct igc_hw *hw, int offset)
-{
-	uint32_t ivar = rd32(IGC_IVAR0);
-
-	/* clear any bits that are currently set */
-	ivar &= ~((uint32_t)0xFF << offset);
-
-	/* write vector and valid bit */
-	ivar |= IGC_IVAR_VALID << offset;
-
-	wr32(IGC_IVAR0, ivar);
-}
-
-/**
  * igc_irq_enable - Enable default interrupt generation settings
  * @adapter: board private structure
  */
@@ -756,10 +606,6 @@ static void igc_irq_disable(struct igc_adapter *adapter)
 	wrfl();
 }
 
-/**
- * igc_down - Close the interface
- * @adapter: board private structure
- */
 void igc_down(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
@@ -855,37 +701,29 @@ no_wait:
 	wr32(IGC_ICS, IGC_ICS_RXDMT0);
 }
 
-void igc_intr_msi(struct igc_adapter *adapter)
+int igc_intr_msi(struct igc_adapter *adapter, uint8_t* receive_pkt)
 {
 	struct igc_hw *hw = &adapter->hw;
+	int len = 0;
+
 	/* read ICR disables interrupts using IAM */
 	uint32_t icr = rd32(IGC_ICR);
 
 	if (icr & (IGC_ICR_RXSEQ | IGC_ICR_LSC)) {
-		printf("Link status change interrupt\n");
+		printf("igc driver: Link status change interrupt\n");
 		if (!adapter->state_down)
 			igc_update_link(adapter);
 	}
 
-	// struct timeval  bgn, end;
-	// static int iii = 0;
-	// if (iii < 1000)
-	// {
-	// 	gettimeofday(&bgn, NULL);
-	// }
 	igc_clean_tx_irq(adapter);
-	igc_clean_rx_irq(adapter);
-	// if (iii < 1000)
-	// {
-	// 	gettimeofday(&end, NULL);
-	// 	printf ("Total time = %li us\n", (end.tv_usec - bgn.tv_usec) + 1000000 * (end.tv_sec - bgn.tv_sec));
-	// 	iii++;
-	// }
-
+	if (receive_pkt) {
+		len = igc_clean_rx_irq(adapter, receive_pkt);
+	}
 
 	if (!adapter->state_down) {
 		igc_irq_enable(adapter);
 	}
+	return len;
 }
 
 int igc_open(struct igc_adapter *adapter)
@@ -910,14 +748,12 @@ int igc_open(struct igc_adapter *adapter)
 	igc_power_up_link(adapter);
 	igc_configure(adapter);
 
-	igc_write_ivar(hw, 0);  // rx_ring
-	igc_write_ivar(hw, 8);  // tx_ring
-
 	adapter->state_down = false;
 
 	/* Clear any pending interrupts. */
 	rd32(IGC_ICR);
-	wr32(IGC_EITR(0), (IGC_ITR_USECS & IGC_QVECTOR_MASK) | IGC_EITR_CNT_IGNR); // set interrupt throttle rate
+	// optimization: default interrupt throttle rate setting seems to yield the same results
+	//wr32(IGC_EITR(0), (IGC_ITR_USECS & IGC_QVECTOR_MASK) | IGC_EITR_CNT_IGNR); // set interrupt throttle rate
 	igc_irq_enable(adapter);
 
 	return IGC_SUCCESS;
@@ -956,8 +792,6 @@ int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr)
 	err = igc_base_info.get_invariants(hw);
 	if (err)
 		goto err_sw_init;
-
-	//pci_enable_msi(adapter->pdev);
 
 	// init the rings
 	adapter->tx_ring.count = IGC_DEFAULT_TXD;
@@ -1001,7 +835,6 @@ err_eeprom:
 	if (!igc_check_reset_block(hw))
 		igc_reset_phy(hw);
 err_sw_init:
-	//pci_disable_msi(adapter->pdev);
 	return err;
 }
 
@@ -1013,6 +846,5 @@ void igc_remove(struct igc_adapter *adapter)
 	 * would have already happened in close and is redundant.
 	 */
 	igc_release_hw_control(adapter);
-	//pci_disable_msi(adapter->pdev);
 }
 
