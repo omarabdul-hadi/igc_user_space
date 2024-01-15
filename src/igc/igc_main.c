@@ -16,7 +16,7 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 
-#include "./../atemsys_main.h"
+#include "../atemsys_main.h"
 #include "igc.h"
 
 void igc_reset(struct igc_adapter *adapter, bool power_down_phy)
@@ -773,6 +773,16 @@ int igc_close(struct igc_adapter *adapter)
 	igc_free_tx_resources(adapter);
 	igc_free_rx_resources(adapter);
 	return 0;
+}
+
+uint32_t igc_rd32(struct igc_hw *hw, uint32_t reg) {
+	if (hw->hw_addr) {
+		return ( *((uint32_t*) (hw->hw_addr + reg)) );
+	}
+	else {
+		printf("igc driver: fatal error, hardware io data pointer is null\n");
+		return 0;
+	}
 }
 
 int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr)

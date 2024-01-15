@@ -7,12 +7,10 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 
-#include "atemsys_main.h"
-#include "igc/igc.h"
+#include "igc_user_space.h"
 
-static struct igc_adapter adapter;
-static ATEMSYS_T_PCI_SELECT_DESC pci_device_descriptor;
 
 void print_debug_packet(uint8_t* data, int size){
 	printf("%02x %02x %02x %02x %02x %02x %02x %02x  %02x %02x %02x %02x %02x %02x %02x %02x \n",
@@ -35,77 +33,6 @@ void print_debug_packet(uint8_t* data, int size){
 	printf("\n");
 }
 
-void spin_sleep(int delay_us) {
-	
-	struct timeval  bgn, end;
-
-	gettimeofday(&bgn, NULL);
-	while (true) {
-		gettimeofday(&end, NULL);
-		if ((end.tv_usec - bgn.tv_usec) + 1000000 * (end.tv_sec - bgn.tv_sec) >= delay_us)
-			break;
-	}
-}
-
-void send_frame(uint8_t* data, int len) {
-	igc_send_frame(&adapter, data, len);
-}
-
-uint32_t receive_frame(uint8_t* receive_pkt) {
-	uint32_t len, val, pending_interrupts;
-
-	// spin sleep is a necessary delay because interrupt is sometimes 7 us too early for cleaning the rx irq and receiving the frame
-
-	val = read(adapter.fd, &pending_interrupts, 4);    // avg:  0 us, max: 130 us
-	spin_sleep(7);                                     // avg:  7 us, max:  23 us
-	len = igc_intr_msi(&adapter, receive_pkt);
-
-	return len;
-}
-
-void init() {
-	printf("Intel(R) 2.5G Ethernet Linux Driver\n");
-	printf("driver name: igc\n");
-	printf("auther: Intel Corporation, <linux.nics@intel.com>\n");
-	printf("Copyright(c) 2018 Intel Corporation.\n");
-
-	int32_t pending_interrupts = 0;
-    int val = 0;
-	int fd = atemsys_pci_open(&pci_device_descriptor);
-    void* io_addr = atemsys_map_io(fd, &pci_device_descriptor);
-
-	igc_probe(&adapter, fd, (uint8_t*)io_addr);
-	igc_open(&adapter);
-
-	atemsys_pci_intr_enable(fd, &pci_device_descriptor);
-    atemsys_pci_set_affin(fd, 15);
-
-    uint32_t mac_addr_uint32_t_val_low = *((uint32_t*) (io_addr + IGC_RAL(0)) );
-    uint32_t mac_addr_uint32_t_val_hig = *((uint32_t*) (io_addr + IGC_RAH(0)) );
-
-    printf("mac addr uint32_t low val is 0x%x\n", mac_addr_uint32_t_val_low);
-    printf("mac addr uint32_t hig val is 0x%x\n", mac_addr_uint32_t_val_hig);
-
-	// wait for link
-	usleep(2500000);
-
-	// first interrupt is link status change, second one is unknown but needs to be cleared
-	for (int i = 0; i < 2; i++) {
-  		val = read(adapter.fd, &pending_interrupts, sizeof(int32_t));
-		igc_intr_msi(&adapter, NULL);
-	}
-	// at this point all interrupts are cleared and any call to read()
-	// will block until a frame is sent or received, or the link status changes
-}
-
-void deinit() {
-    atemsys_pci_intr_disable(adapter.fd, &pci_device_descriptor);
-	igc_close(&adapter);
-    igc_remove(&adapter);
-	atemsys_unmap_mem(adapter.io_addr, pci_device_descriptor.aBar[0].dwIOLen); // unmap io memory
-    atemsys_pci_close(adapter.fd, &pci_device_descriptor);
-}
-
 static uint32_t min = 10000000;
 static uint32_t max = 0;
 static uint64_t sum = 0;
@@ -122,7 +49,7 @@ void update_stats(uint32_t cur) {
 	cyc++;
 }
 
-void print_stats(int sig) {
+void print_stats(int) {
 	printf("cycletime in us min: %03d, avg: %03ld, max: %03d\n", min, sum/cyc, max);
 	exit(0);
 }
@@ -144,6 +71,8 @@ void send_receive_cycle(uint8_t* send_pkt, uint32_t send_pkt_len) {
 
 	update_stats(cur);
 
+	if (!receive_pkt_len)
+		printf("igc user space app receive frame error\n");
 
 	// static int iii = 0;
 	// if (iii < 4)
@@ -189,7 +118,7 @@ void test_cycle() {
 	send_receive_cycle(data4, len4);
 }
 
-void *thread_func(void *data) {
+void *thread_func(void *) {
 	init();
 	test_cycle();
     deinit();

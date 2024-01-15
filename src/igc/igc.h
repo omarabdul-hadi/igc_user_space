@@ -23,7 +23,7 @@
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 
 #include "igc_hw.h"
-#include "./../atemsys/atemsys.h"
+#include "../atemsys/atemsys.h"
 
 struct igc_ring {
 	union {                         /* array of buffer info structs */

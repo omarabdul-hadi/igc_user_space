@@ -4,6 +4,8 @@
 #ifndef _IGC_REGS_H_
 #define _IGC_REGS_H_
 
+#include <stdint.h>
+
 /* General Register Descriptions */
 #define IGC_CTRL		0x00000  /* Device Control - RW */
 #define IGC_STATUS		0x00008  /* Device Status - RO */
@@ -313,10 +315,11 @@
 
 /* forward declaration */
 struct igc_hw;
+uint32_t igc_rd32(struct igc_hw *hw, uint32_t reg);
 
 /* write operations, indexed using DWORDS */
 #define wr32(reg, val)  *((uint32_t*) (hw->hw_addr + reg)) = val;
-#define rd32(reg) ( *((uint32_t*) (hw->hw_addr + reg)) )
+#define rd32(reg) igc_rd32(hw, reg)
 
 #define wrfl() ((void)rd32(IGC_STATUS))
 

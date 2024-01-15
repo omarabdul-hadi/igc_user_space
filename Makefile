@@ -1,7 +1,7 @@
 # defines
 CC = gcc
-OBJS = main.o atemsys_main.o igc_main.o igc_mac.o igc_i225.o igc_base.o igc_nvm.o igc_phy.o
-CFLAGS = -c -O2 #-Wall
+OBJS = main.o igc_user_space.o atemsys_main.o igc_main.o igc_mac.o igc_i225.o igc_base.o igc_nvm.o igc_phy.o
+CFLAGS = -c -O2 -Wall
 SCR_DIR = src
 OBJ_DIR = obj
 VPATH = $(SCR_DIR)/igc:$(SCR_DIR)  # tell compiler where to look for source files to compile

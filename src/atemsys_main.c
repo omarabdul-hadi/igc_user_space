@@ -43,8 +43,8 @@ int atemsys_pci_open(ATEMSYS_T_PCI_SELECT_DESC* pci_device_descriptor) {
     uint32_t io_phys_base_addr = pci_device_descriptor->aBar[0].qwIOMem;
     uint32_t size              = pci_device_descriptor->aBar[0].dwIOLen;
 
-    printf("io_phys_base_addr is 0x%x\n", io_phys_base_addr);  // this should be: 0x84200000
-    printf("io_phys_base_leng is 0x%x\n", size);               // this should be: 0x  100000
+    printf("io_phys_base_addr is 0x%x\n", io_phys_base_addr);
+    printf("io_phys_base_leng is 0x%x\n", size);
 
 	return fd;
 }
@@ -67,9 +67,7 @@ void* atemsys_map_dma(int fd, uint32_t size, int prot) {
 
 uint64_t atemsys_get_dma_addr(void* allocated_mem_ptr) {
 	uint64_t dma_phys_addr = 0;
-    ((uint32_t*) &dma_phys_addr)[0] = ((uint32_t*) allocated_mem_ptr)[0];
-    ((uint32_t*) &dma_phys_addr)[1] = ((uint32_t*) allocated_mem_ptr)[1];
-
+    memcpy(&dma_phys_addr, allocated_mem_ptr, 8);
 	return dma_phys_addr;
 }
 
@@ -88,6 +86,13 @@ void atemsys_pci_set_affin(int fd, int cpu) {
     if (ioctl(fd, ATEMSYS_IOCTL_INT_SET_CPU_AFFINITY, &cpu_mask) == -1) {
         printf("ioctl atemsys ATEMSYS_IOCTL_INT_SET_CPU_AFFINITY request failed\n");
     }
+}
+
+void atemsys_pci_intr_wait(int fd) {
+    uint32_t val, pending_interrupts;
+    val = read(fd, &pending_interrupts, 4);
+	if (val != 4)
+		printf("atemsys driver file descriptor read failed, i.e interrupt wait\n");
 }
 
 void atemsys_pci_intr_disable(int fd, ATEMSYS_T_PCI_SELECT_DESC* pci_device_descriptor) {
