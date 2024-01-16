@@ -85,7 +85,7 @@ int find_vendor_and_device_id_str(const char *str, PCI_ID* pci_id) {
 #define INTEL_VENDOR_ID 0x8086
 #define I225V_DEVICE_ID 0x15f3
 
-bool is_igc_user_space_drv_supported() {
+bool igc_user_space_supported() {
 
     char output[10][LINE_MAX_BUFFER_SIZE];
     int a = runExternalCommand("lspci -nn | grep -i 'Ethernet Controller'", output);
@@ -117,7 +117,7 @@ void spin_sleep(uint32_t delay_us) {
 	}
 }
 
-void init() {
+void igc_user_space_init() {
 	printf("Intel(R) 2.5G Ethernet Linux Driver\n");
 	printf("driver name: igc\n");
 	printf("auther: Intel Corporation, <linux.nics@intel.com>\n");
@@ -145,7 +145,7 @@ void init() {
 	// will block until a frame is sent or received, or the link status changes
 }
 
-void deinit() {
+void igc_user_space_deinit() {
     atemsys_pci_intr_disable(adapter.fd, &pci_device_descriptor);
 	igc_close(&adapter);
     igc_remove(&adapter);
@@ -153,15 +153,15 @@ void deinit() {
     atemsys_pci_close(adapter.fd, &pci_device_descriptor);
 }
 
-void get_mac_addr(uint8_t* mac_addr) {
+void igc_user_space_get_mac(uint8_t* mac_addr) {
 	memcpy(mac_addr, adapter.hw.mac.addr, ETH_ALEN);
 }
 
-void send_frame(uint8_t* data, int len) {
+void igc_user_space_send_frame(uint8_t* data, int len) {
 	igc_send_frame(&adapter, data, len);
 }
 
-uint32_t receive_frame(uint8_t* receive_pkt) {
+uint32_t igc_user_space_receive_frame(uint8_t* receive_pkt) {
 	uint32_t receive_pkt_len;
 
 	// spin sleep is a necessary delay because interrupt is sometimes 7 us too early for cleaning the rx irq and receiving the frame

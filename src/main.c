@@ -57,14 +57,13 @@ void print_stats(int) {
 void send_receive_cycle(uint8_t* send_pkt, uint32_t send_pkt_len) {
 
 	uint32_t receive_pkt_len;
-	uint8_t* receive_pkt = malloc(128);
-	memset(receive_pkt, 0, 128);
+	uint8_t receive_pkt[128] = {0};
 
 	struct timeval  bgn, end;
 
 	gettimeofday(&bgn, NULL);
-	send_frame(send_pkt, send_pkt_len);           // avg:  0 us, max:  22 us
-	receive_pkt_len = receive_frame(receive_pkt);
+	igc_user_space_send_frame(send_pkt, send_pkt_len);           // avg:  0 us, max:  22 us
+	receive_pkt_len = igc_user_space_receive_frame(receive_pkt);
 	gettimeofday(&end, NULL);
 	
 	uint32_t cur = (end.tv_usec - bgn.tv_usec) + 1000000 * (end.tv_sec - bgn.tv_sec);
@@ -84,8 +83,6 @@ void send_receive_cycle(uint8_t* send_pkt, uint32_t send_pkt_len) {
 	// 	print_debug_packet(receive_pkt, receive_pkt_len);
 	// 	iii++;
 	// }
-
-	free(receive_pkt);
 }
 
 void test_cycle() {
@@ -122,29 +119,29 @@ void *thread_func(void *) {
 
 	uint8_t mac_addr[6]= {0};
 
-	if (!is_igc_user_space_drv_supported()) {
+	if (!igc_user_space_supported()) {
 		printf("igc user space driver not supported on any of the available pcie ethernet cards\n");
 		return 0;
 	}
 
-	init();
-	get_mac_addr(mac_addr);
+	igc_user_space_init();
+	igc_user_space_get_mac(mac_addr);
 	printf("Mac addr is: %02x:%02x:%02x:%02x:%02x:%02x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 	test_cycle();
-    deinit();
+    igc_user_space_deinit();
 
-	init();
+	igc_user_space_init();
 	//static int iii = 0;
 	//while (iii < 1000) {
 	while (true) {
 	//	iii++;
 		test_cycle();
 	}
-    deinit();
+    igc_user_space_deinit();
 
-	init();
+	igc_user_space_init();
 	test_cycle();
-    deinit();
+    igc_user_space_deinit();
 
 	return NULL;
 }
