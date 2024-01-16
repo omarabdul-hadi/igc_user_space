@@ -40,11 +40,11 @@ int atemsys_pci_open(ATEMSYS_T_PCI_SELECT_DESC* pci_device_descriptor) {
         return 0;
     }
 
-    uint32_t io_phys_base_addr = pci_device_descriptor->aBar[0].qwIOMem;
-    uint32_t size              = pci_device_descriptor->aBar[0].dwIOLen;
+    // uint32_t io_phys_base_addr = pci_device_descriptor->aBar[0].qwIOMem;
+    // uint32_t size              = pci_device_descriptor->aBar[0].dwIOLen;
 
-    printf("io_phys_base_addr is 0x%x\n", io_phys_base_addr);
-    printf("io_phys_base_leng is 0x%x\n", size);
+    // printf("io_phys_base_addr is 0x%x\n", io_phys_base_addr);
+    // printf("io_phys_base_leng is 0x%x\n", size);
 
 	return fd;
 }
@@ -54,8 +54,8 @@ void* atemsys_map_io(int fd, ATEMSYS_T_PCI_SELECT_DESC* pci_device_descriptor) {
 	uint32_t size              = pci_device_descriptor->aBar[0].dwIOLen;
 
 	void* io_addr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, io_phys_base_addr);
-    printf("io_addr              is 0x%lx\n", (uint64_t) io_addr);
-    printf("io_addr uint32_t_val is 0x%x\n", *((uint32_t*) io_addr));
+    // printf("io_addr              is 0x%lx\n", (uint64_t) io_addr);
+    // printf("io_addr uint32_t_val is 0x%x\n", *((uint32_t*) io_addr));
 	return io_addr;
 }
 

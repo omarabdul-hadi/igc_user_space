@@ -1,5 +1,5 @@
-
-
+#include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 
 #include "atemsys_main.h"
@@ -9,10 +9,106 @@
 static struct igc_adapter adapter;
 static ATEMSYS_T_PCI_SELECT_DESC pci_device_descriptor;
 
+
+
+#define LINE_MAX_BUFFER_SIZE 255
+ 
+int runExternalCommand(char *cmd, char lines[][LINE_MAX_BUFFER_SIZE]) {
+	FILE *fp;
+	char path[LINE_MAX_BUFFER_SIZE];
+
+	/* Open the command for reading. */
+	fp = popen(cmd, "r");
+	if (fp == NULL) {
+		return -1;
+	}
+
+	int cnt = 0;
+	while (fgets(path, sizeof(path), fp) != NULL) {
+		strcpy(lines[cnt++], path);
+	}
+	pclose(fp);
+	return cnt;
+}
+
+typedef struct {
+	uint32_t vendor_id;
+	uint32_t device_id;
+} PCI_ID;
+
+int find_vendor_and_device_id_str(const char *str, PCI_ID* pci_id) {
+
+	// on linux, if the pcie ethernet driver is supported, the following command should have the output below
+	// $ lspci -nn | grep -i 'Ethernet Controller'
+    // 56:00.0 Ethernet controller [0200]: Intel Corporation Ethernet Controller I225-V [8086:15f3] (rev 03)
+
+	const char *bgn = str;
+	const char *end = str;
+	char buff[10];
+	int len;
+
+	//////////////////////////////////////////////////////////////////////////////////////
+	// vendor and device id is located after the second "[" char in the returned string
+	for (int i = 0; i < 2; i++) {
+		bgn = strstr(bgn, "[");
+		if (!bgn)
+			return -1;
+		bgn += 1;
+	}
+	//////////////////////////////////////////////////////////////////////////////////////
+	// get vendor id, it is located between 2nd "[" and ":"
+	end = bgn;
+
+	end = strstr(end, ":");
+	if (!end)
+		return -1;
+
+	len = end-bgn;
+	strncpy(buff, bgn, len);
+	pci_id->vendor_id = (int)strtol(buff, NULL, 16);
+
+	//////////////////////////////////////////////////////////////////////////////////////
+	// get device id, it is located between ":" and 2nd "]"
+	bgn = end+1;
+
+	end = strstr(bgn, "]");
+	if (!end)
+		return -1;
+
+	len = end-bgn;
+	strncpy(buff, bgn, len);
+	pci_id->device_id = (int)strtol(buff, NULL, 16);
+
+	return 0;
+}
+
+#define INTEL_VENDOR_ID 0x8086
+#define I225V_DEVICE_ID 0x15f3
+
+bool is_igc_user_space_drv_supported() {
+
+    char output[10][LINE_MAX_BUFFER_SIZE];
+    int a = runExternalCommand("lspci -nn | grep -i 'Ethernet Controller'", output);
+
+	// loop over all ethernet controllers incase there are multiple ones
+    for (int i = 0; i < a; ++ i) {
+        printf("%s", output[i]);
+
+		PCI_ID pci_id;
+		if (!find_vendor_and_device_id_str(output[i], &pci_id) &&
+		     pci_id.vendor_id == INTEL_VENDOR_ID               &&
+			 pci_id.device_id == I225V_DEVICE_ID)
+			return true;
+    }
+	return false;
+}
+
 void spin_sleep(uint32_t delay_us) {
 	
 	struct timeval  bgn, end;
 
+	// yes this is very ugly and terrible, but handing off the process to the OS via a usleep() introduces occational added latency of more than 100 us
+	// which is quite detrimental! clock_nanosleep() also made no difference
 	gettimeofday(&bgn, NULL);
 	while (true) {
 		gettimeofday(&end, NULL);
@@ -26,6 +122,7 @@ void init() {
 	printf("driver name: igc\n");
 	printf("auther: Intel Corporation, <linux.nics@intel.com>\n");
 	printf("Copyright(c) 2018 Intel Corporation.\n");
+	printf("Driver has been minimalized and moved to user space by Omar Abdul-hadi to reduce latency\n");
 
 	int fd = atemsys_pci_open(&pci_device_descriptor);
     void* io_addr = atemsys_map_io(fd, &pci_device_descriptor);
@@ -35,12 +132,6 @@ void init() {
 
 	atemsys_pci_intr_enable(fd, &pci_device_descriptor);
     atemsys_pci_set_affin(fd, 15);
-
-    uint32_t mac_addr_uint32_t_val_low = *((uint32_t*) (io_addr + IGC_RAL(0)) );
-    uint32_t mac_addr_uint32_t_val_hig = *((uint32_t*) (io_addr + IGC_RAH(0)) );
-
-    printf("mac addr uint32_t low val is 0x%x\n", mac_addr_uint32_t_val_low);
-    printf("mac addr uint32_t hig val is 0x%x\n", mac_addr_uint32_t_val_hig);
 
 	// wait for link
 	usleep(2500000);
@@ -60,6 +151,10 @@ void deinit() {
     igc_remove(&adapter);
 	atemsys_unmap_mem(adapter.io_addr, pci_device_descriptor.aBar[0].dwIOLen); // unmap io memory
     atemsys_pci_close(adapter.fd, &pci_device_descriptor);
+}
+
+void get_mac_addr(uint8_t* mac_addr) {
+	memcpy(mac_addr, adapter.hw.mac.addr, ETH_ALEN);
 }
 
 void send_frame(uint8_t* data, int len) {

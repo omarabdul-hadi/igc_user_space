@@ -119,7 +119,17 @@ void test_cycle() {
 }
 
 void *thread_func(void *) {
+
+	uint8_t mac_addr[6]= {0};
+
+	if (!is_igc_user_space_drv_supported()) {
+		printf("igc user space driver not supported on any of the available pcie ethernet cards\n");
+		return 0;
+	}
+
 	init();
+	get_mac_addr(mac_addr);
+	printf("Mac addr is: %02x:%02x:%02x:%02x:%02x:%02x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 	test_cycle();
     deinit();
 
