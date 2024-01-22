@@ -44,7 +44,7 @@ int find_vendor_and_device_id_str(const char *str, PCI_ID* pci_id) {
 
 	const char *bgn = str;
 	const char *end = str;
-	char buff[10];
+	char buff[10] = {0};
 	int len;
 
 	//////////////////////////////////////////////////////////////////////////////////////
@@ -89,12 +89,12 @@ bool igc_user_space_supported() {
 
     char output[10][LINE_MAX_BUFFER_SIZE];
     int a = runExternalCommand("lspci -nn | grep -i 'Ethernet Controller'", output);
+	PCI_ID pci_id;
 
 	// loop over all ethernet controllers incase there are multiple ones
     for (int i = 0; i < a; ++ i) {
         printf("%s", output[i]);
 
-		PCI_ID pci_id;
 		if (!find_vendor_and_device_id_str(output[i], &pci_id) &&
 		     pci_id.vendor_id == INTEL_VENDOR_ID               &&
 			 pci_id.device_id == I225V_DEVICE_ID)
@@ -164,10 +164,9 @@ void igc_user_space_send_frame(uint8_t* data, int len) {
 uint32_t igc_user_space_receive_frame(uint8_t* receive_pkt) {
 	uint32_t receive_pkt_len;
 
-	// spin sleep is a necessary delay because interrupt is sometimes 7 us too early for cleaning the rx irq and receiving the frame
-
+	// spin sleep is a necessary delay because interrupt is sometimes 12 us too early for cleaning the rx irq and receiving the frame
 	atemsys_pci_intr_wait(adapter.fd);         // avg:  0 us, max: 130 us
-	spin_sleep(7);                             // avg:  7 us, max:  23 us
+	spin_sleep(12);                            // avg: 13 us, max:  29 us
 	receive_pkt_len = igc_intr_msi(&adapter, receive_pkt);
 
 	return receive_pkt_len;
