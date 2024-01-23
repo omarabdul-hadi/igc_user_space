@@ -191,12 +191,16 @@
 
 #define IGC_ICS_RXT0		IGC_ICR_RXT0 /* Rx timer intr */
 
-#define IMS_ENABLE_MASK ( \
+/* #define IMS_ENABLE_MASK ( \
 	IGC_IMS_RXT0   |    \
 	IGC_IMS_TXDW   |    \
 	IGC_IMS_RXDMT0 |    \
 	IGC_IMS_RXSEQ  |    \
-	IGC_IMS_LSC)
+	IGC_IMS_LSC) 
+*/
+
+// only use link status change interrupt, because tx/rx interrupt handling in msi mode with atemsys is too slow
+#define IMS_ENABLE_MASK (IGC_IMS_LSC)
 
 /* Interrupt Mask Set */
 #define IGC_IMS_TXDW		IGC_ICR_TXDW	/* Tx desc written back */

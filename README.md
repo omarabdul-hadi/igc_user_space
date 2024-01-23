@@ -1,5 +1,5 @@
 This project moves the igc intel PCIe card ethernet driver from linux kernel space to user space.
-The round trip ethernet send/receive frame cyclic latency reduction is about 1 to 2 orders of magnitude.
+The round trip ethernet send/receive frame cyclic latency reduction is about half.
 The library only supports datalink send/receive packets.
 
 Note this library only works on linux PC's with I225-V ethernet cards.

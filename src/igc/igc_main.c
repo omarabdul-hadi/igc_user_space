@@ -484,31 +484,30 @@ static void igc_alloc_rx_buffers(struct igc_adapter *adapter, uint16_t cleaned_c
 	}
 }
 
-uint32_t igc_clean_rx_irq(struct igc_adapter *adapter, uint8_t* receive_pkt)
+int igc_clean_rx_irq(struct igc_adapter *adapter, uint8_t* receive_pkt)
 {
 	struct igc_ring *rx_ring = &adapter->rx_ring;
 	uint16_t cleaned_count = igc_desc_unused(rx_ring);
 	union igc_adv_rx_desc *rx_desc = IGC_RX_DESC(rx_ring, rx_ring->next_to_clean);
 	struct igc_rx_buffer *rx_buffer = &rx_ring->rx_buffer_info[rx_ring->next_to_clean];
-	uint32_t len = le16_to_cpu(rx_desc->wb.upper.length);
+	int len = le16_to_cpu(rx_desc->wb.upper.length);
 
-	if (len) {
-		memcpy(receive_pkt, rx_buffer->data, len);
-
-		// reuse old buffer
-		struct igc_rx_buffer *new_buff = &rx_ring->rx_buffer_info[rx_ring->next_to_alloc];
-		new_buff->dma  = rx_buffer->dma;
-		new_buff->data = rx_buffer->data;
-		rx_buffer->data = NULL;
-
-		rx_ring->next_to_alloc = (rx_ring->next_to_alloc + 1) % rx_ring->count;
-		rx_ring->next_to_clean = (rx_ring->next_to_clean + 1) % rx_ring->count;
-
-		cleaned_count++;
+	while (!len) {
+		usleep(10);
+		len = le16_to_cpu(rx_desc->wb.upper.length);
 	}
-	else {
-		printf("rxcf\n");
-	}
+	memcpy(receive_pkt, rx_buffer->data, len);
+
+	// reuse old buffer
+	struct igc_rx_buffer *new_buff = &rx_ring->rx_buffer_info[rx_ring->next_to_alloc];
+	new_buff->dma  = rx_buffer->dma;
+	new_buff->data = rx_buffer->data;
+	rx_buffer->data = NULL;
+
+	rx_ring->next_to_alloc = (rx_ring->next_to_alloc + 1) % rx_ring->count;
+	rx_ring->next_to_clean = (rx_ring->next_to_clean + 1) % rx_ring->count;
+
+	cleaned_count++;
 
 	if (cleaned_count) {
 		igc_alloc_rx_buffers(adapter, cleaned_count);
@@ -589,8 +588,8 @@ static void igc_irq_enable(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
 
-	wr32(IGC_IMS, IMS_ENABLE_MASK | IGC_IMS_DRSTA);
-	wr32(IGC_IAM, IMS_ENABLE_MASK | IGC_IMS_DRSTA);
+	wr32(IGC_IMS, IMS_ENABLE_MASK);
+	wr32(IGC_IAM, IMS_ENABLE_MASK);
 }
 
 /**
@@ -701,29 +700,17 @@ no_wait:
 	wr32(IGC_ICS, IGC_ICS_RXDMT0);
 }
 
-int igc_intr_msi(struct igc_adapter *adapter, uint8_t* receive_pkt)
+void igc_intr_msi(struct igc_adapter *adapter)
 {
 	struct igc_hw *hw = &adapter->hw;
-	int len = 0;
 
 	/* read ICR disables interrupts using IAM */
 	uint32_t icr = rd32(IGC_ICR);
 
-	if (icr & (IGC_ICR_RXSEQ | IGC_ICR_LSC)) {
-		printf("igc driver: Link status change interrupt\n");
-		if (!adapter->state_down)
-			igc_update_link(adapter);
-	}
+	if (icr & IGC_ICR_LSC)
+		igc_update_link(adapter);
 
-	igc_clean_tx_irq(adapter);
-	if (receive_pkt) {
-		len = igc_clean_rx_irq(adapter, receive_pkt);
-	}
-
-	if (!adapter->state_down) {
-		igc_irq_enable(adapter);
-	}
-	return len;
+	igc_irq_enable(adapter);
 }
 
 int igc_open(struct igc_adapter *adapter)

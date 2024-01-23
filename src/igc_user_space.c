@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 #include "atemsys_main.h"
 #include "igc/igc.h"
@@ -103,18 +104,36 @@ bool igc_user_space_supported() {
 	return false;
 }
 
-void spin_sleep(uint32_t delay_us) {
-	
-	struct timeval  bgn, end;
-
-	// yes this is very ugly and terrible, but handing off the process to the OS via a usleep() introduces occational added latency of more than 100 us
-	// which is quite detrimental! clock_nanosleep() also made no difference
-	gettimeofday(&bgn, NULL);
-	while (true) {
-		gettimeofday(&end, NULL);
-		if ((end.tv_usec - bgn.tv_usec) + 1000000 * (end.tv_sec - bgn.tv_sec) >= delay_us)
-			break;
+void* intr_handling_thread(void*) {
+	printf("igc user space, now launching interrupt handling thread for updating link status\n");
+	while (!adapter.state_down) {
+		atemsys_pci_intr_wait(adapter.fd); // this blocks untill an intr is received
+		igc_intr_msi(&adapter);            // this handles the intr according to the type, note that only link status change intr are enabled
 	}
+	printf("igc user space, now killing interrupt handling thread for updating link status\n");
+	return NULL;
+}
+
+int launch_intr_handling_thread() {
+	pthread_attr_t attr;
+	pthread_t thread;
+	int ret = 0;
+
+	/* Initialize pthread attributes (default values) */
+	ret = pthread_attr_init(&attr);
+	if (ret) {
+		printf("init pthread attributes failed\n");
+		goto out;
+	}
+
+	/* Create a pthread with specified attributes */
+	ret = pthread_create(&thread, &attr, intr_handling_thread, NULL);
+	if (ret) {
+		printf("create pthread failed\n");
+		goto out;
+	}
+out:
+    return ret;
 }
 
 void igc_user_space_init() {
@@ -133,16 +152,8 @@ void igc_user_space_init() {
 	atemsys_pci_intr_enable(fd, &pci_device_descriptor);
     atemsys_pci_set_affin(fd, 15);
 
-	// wait for link
-	usleep(2500000);
-
-	// first interrupt is link status change, second one is unknown but needs to be cleared
-	for (int i = 0; i < 2; i++) {
-  		atemsys_pci_intr_wait(fd);
-		igc_intr_msi(&adapter, NULL);
-	}
-	// at this point all interrupts are cleared and any call to read()
-	// will block until a frame is sent or received, or the link status changes
+	launch_intr_handling_thread(); // this handles link status changes
+	usleep(2500000); // if link is present, it takes approx 2.5 secs to update 
 }
 
 void igc_user_space_deinit() {
@@ -157,17 +168,15 @@ void igc_user_space_get_mac(uint8_t* mac_addr) {
 	memcpy(mac_addr, adapter.hw.mac.addr, ETH_ALEN);
 }
 
+bool igc_user_space_get_link_status() {
+	return adapter.link;
+}
+
 void igc_user_space_send_frame(uint8_t* data, int len) {
 	igc_send_frame(&adapter, data, len);
 }
 
 uint32_t igc_user_space_receive_frame(uint8_t* receive_pkt) {
-	uint32_t receive_pkt_len;
-
-	// spin sleep is a necessary delay because interrupt is sometimes 12 us too early for cleaning the rx irq and receiving the frame
-	atemsys_pci_intr_wait(adapter.fd);         // avg:  0 us, max: 130 us
-	spin_sleep(12);                            // avg: 13 us, max:  29 us
-	receive_pkt_len = igc_intr_msi(&adapter, receive_pkt);
-
-	return receive_pkt_len;
+	igc_clean_tx_irq(&adapter);
+	return igc_clean_rx_irq(&adapter, receive_pkt);
 }

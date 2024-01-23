@@ -62,7 +62,8 @@ void send_receive_cycle(uint8_t* send_pkt, uint32_t send_pkt_len) {
 	struct timeval  bgn, end;
 
 	gettimeofday(&bgn, NULL);
-	igc_user_space_send_frame(send_pkt, send_pkt_len);           // avg:  0 us, max:  22 us
+	igc_user_space_send_frame(send_pkt, send_pkt_len);  // avg:  0 us, max:  22 us
+	usleep(130);
 	receive_pkt_len = igc_user_space_receive_frame(receive_pkt);
 	gettimeofday(&end, NULL);
 	
@@ -127,6 +128,12 @@ void *thread_func(void *) {
 	igc_user_space_init();
 	igc_user_space_get_mac(mac_addr);
 	printf("Mac addr is: %02x:%02x:%02x:%02x:%02x:%02x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+
+	if (!igc_user_space_get_link_status()) {
+		printf("No link present, exiting test now\n");
+		return 0;
+	}
+
 	test_cycle();
     igc_user_space_deinit();
 
