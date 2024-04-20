@@ -94,8 +94,6 @@ bool igc_user_space_supported() {
 
 	// loop over all ethernet controllers incase there are multiple ones
     for (int i = 0; i < a; ++ i) {
-        printf("%s", output[i]);
-
 		if (!find_vendor_and_device_id_str(output[i], &pci_id) &&
 		     pci_id.vendor_id == INTEL_VENDOR_ID               &&
 			 pci_id.device_id == I225V_DEVICE_ID)

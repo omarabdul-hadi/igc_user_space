@@ -72,7 +72,7 @@ static int32_t igc_get_hw_semaphore_i225(struct igc_hw *hw)
 
 		/* If we do not have the semaphore here, we have to give up. */
 		if (i == timeout) {
-			printf("igc driver: Driver can't access device - SMBI bit is set.\n");
+			igc_logger(IGC_LOG_INF, " Driver can't access device - SMBI bit is set.\n");
 			return -IGC_ERR_NVM;
 		}
 	}
@@ -92,7 +92,7 @@ static int32_t igc_get_hw_semaphore_i225(struct igc_hw *hw)
 	if (i == timeout) {
 		/* Release semaphores */
 		igc_put_hw_semaphore(hw);
-		printf("igc driver: Driver can't access the NVM\n");
+		igc_logger(IGC_LOG_INF, " Driver can't access the NVM\n");
 		return -IGC_ERR_NVM;
 	}
 
@@ -132,7 +132,7 @@ int32_t igc_acquire_swfw_sync_i225(struct igc_hw *hw, uint16_t mask)
 	}
 
 	if (i == timeout) {
-		printf("igc driver: Driver can't access resource, SW_FW_SYNC timeout.\n");
+		igc_logger(IGC_LOG_INF, " Driver can't access resource, SW_FW_SYNC timeout.\n");
 		ret_val = -IGC_ERR_SWFW_SYNC;
 		goto out;
 	}
@@ -163,7 +163,7 @@ void igc_release_swfw_sync_i225(struct igc_hw *hw, uint16_t mask)
 	 * indefinitely, as it may cause denial of service or system crash.
 	 */
 	if (igc_get_hw_semaphore_i225(hw)) {
-		printf("igc driver: Failed to release SW_FW_SYNC.\n");
+		igc_logger(IGC_LOG_INF, " Failed to release SW_FW_SYNC.\n");
 		return;
 	}
 
@@ -236,7 +236,7 @@ static int32_t igc_write_nvm_srwr(struct igc_hw *hw, uint16_t offset, uint16_t w
 	 */
 	if (offset >= nvm->word_size || (words > (nvm->word_size - offset)) ||
 	    words == 0) {
-		printf("igc driver: nvm parameter(s) out of bounds\n");
+		igc_logger(IGC_LOG_INF, " nvm parameter(s) out of bounds\n");
 		return ret_val;
 	}
 
@@ -258,7 +258,7 @@ static int32_t igc_write_nvm_srwr(struct igc_hw *hw, uint16_t offset, uint16_t w
 		}
 
 		if (ret_val) {
-			printf("igc driver: Shadow RAM write EEWR timed out\n");
+			igc_logger(IGC_LOG_INF, " Shadow RAM write EEWR timed out\n");
 			break;
 		}
 	}
@@ -376,7 +376,7 @@ static int32_t igc_update_flash_i225(struct igc_hw *hw)
 
 	ret_val = igc_pool_flash_update_done_i225(hw);
 	if (ret_val == -IGC_ERR_NVM) {
-		printf("igc driver: Flash update time out\n");
+		igc_logger(IGC_LOG_INF, " Flash update time out\n");
 		goto out;
 	}
 
@@ -385,9 +385,9 @@ static int32_t igc_update_flash_i225(struct igc_hw *hw)
 
 	ret_val = igc_pool_flash_update_done_i225(hw);
 	if (ret_val)
-		printf("igc driver: Flash update time out\n");
+		igc_logger(IGC_LOG_INF, " Flash update time out\n");
 	else
-		printf("igc driver: Flash update complete\n");
+		igc_logger(IGC_LOG_INF, " Flash update complete\n");
 
 out:
 	return ret_val;
@@ -413,7 +413,7 @@ static int32_t igc_update_nvm_checksum_i225(struct igc_hw *hw)
 	 */
 	ret_val = igc_read_nvm_eerd(hw, 0, 1, &nvm_data);
 	if (ret_val) {
-		printf("igc driver: EEPROM read failed\n");
+		igc_logger(IGC_LOG_ERR, "EEPROM read\n");
 		goto out;
 	}
 
@@ -430,7 +430,7 @@ static int32_t igc_update_nvm_checksum_i225(struct igc_hw *hw)
 		ret_val = igc_read_nvm_eerd(hw, i, 1, &nvm_data);
 		if (ret_val) {
 			hw->nvm.ops.release(hw);
-			printf("igc driver: NVM Read Error while updating checksum.\n");
+			igc_logger(IGC_LOG_ERR, "NVM Read while updating checksum.\n");
 			goto out;
 		}
 		checksum += nvm_data;
@@ -440,7 +440,7 @@ static int32_t igc_update_nvm_checksum_i225(struct igc_hw *hw)
 				     &checksum);
 	if (ret_val) {
 		hw->nvm.ops.release(hw);
-		printf("igc driver: NVM Write Error while updating checksum.\n");
+		igc_logger(IGC_LOG_ERR, "NVM Write while updating checksum.\n");
 		goto out;
 	}
 
@@ -522,7 +522,7 @@ int32_t igc_set_ltr_i225(struct igc_hw *hw, bool link)
 		size *= 8;
 
 		if (size < 0) {
-			printf("igc driver: Invalid effective Rx buffer size %d\n",
+			igc_logger(IGC_LOG_INF, " Invalid effective Rx buffer size %d\n",
 			       size);
 			return -IGC_ERR_CONFIG;
 		}

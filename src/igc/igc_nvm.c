@@ -63,7 +63,7 @@ int32_t igc_acquire_nvm(struct igc_hw *hw)
 	if (!timeout) {
 		eecd &= ~IGC_EECD_REQ;
 		wr32(IGC_EECD, eecd);
-		printf("igc driver: Could not acquire NVM grant\n");
+		igc_logger(IGC_LOG_INF, " Could not acquire NVM grant\n");
 		ret_val = -IGC_ERR_NVM;
 	}
 
@@ -105,7 +105,7 @@ int32_t igc_read_nvm_eerd(struct igc_hw *hw, uint16_t offset, uint16_t words, ui
 	 */
 	if (offset >= nvm->word_size || (words > (nvm->word_size - offset)) ||
 	    words == 0) {
-		printf("igc driver: nvm parameter(s) out of bounds\n");
+		igc_logger(IGC_LOG_INF, " nvm parameter(s) out of bounds\n");
 		ret_val = -IGC_ERR_NVM;
 		goto out;
 	}
@@ -167,14 +167,14 @@ int32_t igc_validate_nvm_checksum(struct igc_hw *hw)
 	for (i = 0; i < (NVM_CHECKSUM_REG + 1); i++) {
 		ret_val = hw->nvm.ops.read(hw, i, 1, &nvm_data);
 		if (ret_val) {
-			printf("igc driver: NVM Read Error\n");
+			igc_logger(IGC_LOG_ERR, "NVM Read\n");
 			goto out;
 		}
 		checksum += nvm_data;
 	}
 
 	if (checksum != (uint16_t)NVM_SUM) {
-		printf("igc driver: NVM Checksum Invalid\n");
+		igc_logger(IGC_LOG_INF, " NVM Checksum Invalid\n");
 		ret_val = -IGC_ERR_NVM;
 		goto out;
 	}
@@ -200,7 +200,7 @@ int32_t igc_update_nvm_checksum(struct igc_hw *hw)
 	for (i = 0; i < NVM_CHECKSUM_REG; i++) {
 		ret_val = hw->nvm.ops.read(hw, i, 1, &nvm_data);
 		if (ret_val) {
-			printf("igc driver: NVM Read Error while updating checksum.\n");
+			igc_logger(IGC_LOG_ERR, "NVM Read while updating checksum.\n");
 			goto out;
 		}
 		checksum += nvm_data;
@@ -208,7 +208,7 @@ int32_t igc_update_nvm_checksum(struct igc_hw *hw)
 	checksum = (uint16_t)NVM_SUM - checksum;
 	ret_val = hw->nvm.ops.write(hw, NVM_CHECKSUM_REG, 1, &checksum);
 	if (ret_val)
-		printf("igc driver: NVM Write Error while updating checksum.\n");
+		igc_logger(IGC_LOG_ERR, "NVM Write while updating checksum.\n");
 
 out:
 	return ret_val;

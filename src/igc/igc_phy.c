@@ -178,7 +178,7 @@ int32_t igc_phy_hw_reset(struct igc_hw *hw)
 	} while (!(phpm & IGC_PHY_RST_COMP) && timeout);
 
 	if (!timeout)
-		printf("igc driver: Timeout is expired after a phy reset\n");
+		igc_logger(IGC_LOG_INF, " Timeout is expired after a phy reset\n");
 
 	usleep(150);
 
@@ -248,49 +248,49 @@ static int32_t igc_phy_setup_autoneg(struct igc_hw *hw)
 				 NWAY_AR_10T_HD_CAPS);
 	mii_1000t_ctrl_reg &= ~(CR_1000T_HD_CAPS | CR_1000T_FD_CAPS);
 
-	printf("igc driver: autoneg_advertised %x\n", phy->autoneg_advertised);
+	igc_logger(IGC_LOG_INF, " autoneg_advertised %x\n", phy->autoneg_advertised);
 
 	/* Do we want to advertise 10 Mb Half Duplex? */
 	if (phy->autoneg_advertised & ADVERTISE_10_HALF) {
-		printf("igc driver: Advertise 10mb Half duplex\n");
+		igc_logger(IGC_LOG_INF, " Advertise 10mb Half duplex\n");
 		mii_autoneg_adv_reg |= NWAY_AR_10T_HD_CAPS;
 	}
 
 	/* Do we want to advertise 10 Mb Full Duplex? */
 	if (phy->autoneg_advertised & ADVERTISE_10_FULL) {
-		printf("igc driver: Advertise 10mb Full duplex\n");
+		igc_logger(IGC_LOG_INF, " Advertise 10mb Full duplex\n");
 		mii_autoneg_adv_reg |= NWAY_AR_10T_FD_CAPS;
 	}
 
 	/* Do we want to advertise 100 Mb Half Duplex? */
 	if (phy->autoneg_advertised & ADVERTISE_100_HALF) {
-		printf("igc driver: Advertise 100mb Half duplex\n");
+		igc_logger(IGC_LOG_INF, " Advertise 100mb Half duplex\n");
 		mii_autoneg_adv_reg |= NWAY_AR_100TX_HD_CAPS;
 	}
 
 	/* Do we want to advertise 100 Mb Full Duplex? */
 	if (phy->autoneg_advertised & ADVERTISE_100_FULL) {
-		printf("igc driver: Advertise 100mb Full duplex\n");
+		igc_logger(IGC_LOG_INF, " Advertise 100mb Full duplex\n");
 		mii_autoneg_adv_reg |= NWAY_AR_100TX_FD_CAPS;
 	}
 
 	/* We do not allow the Phy to advertise 1000 Mb Half Duplex */
 	if (phy->autoneg_advertised & ADVERTISE_1000_HALF)
-		printf("igc driver: Advertise 1000mb Half duplex request denied!\n");
+		igc_logger(IGC_LOG_INF, " Advertise 1000mb Half duplex request denied!\n");
 
 	/* Do we want to advertise 1000 Mb Full Duplex? */
 	if (phy->autoneg_advertised & ADVERTISE_1000_FULL) {
-		printf("igc driver: Advertise 1000mb Full duplex\n");
+		igc_logger(IGC_LOG_INF, " Advertise 1000mb Full duplex\n");
 		mii_1000t_ctrl_reg |= CR_1000T_FD_CAPS;
 	}
 
 	/* We do not allow the Phy to advertise 2500 Mb Half Duplex */
 	if (phy->autoneg_advertised & ADVERTISE_2500_HALF)
-		printf("igc driver: Advertise 2500mb Half duplex request denied!\n");
+		igc_logger(IGC_LOG_INF, " Advertise 2500mb Half duplex request denied!\n");
 
 	/* Do we want to advertise 2500 Mb Full Duplex? */
 	if (phy->autoneg_advertised & ADVERTISE_2500_FULL) {
-		printf("igc driver: Advertise 2500mb Full duplex\n");
+		igc_logger(IGC_LOG_INF, " Advertise 2500mb Full duplex\n");
 		aneg_multigbt_an_ctrl |= CR_2500T_FD_CAPS;
 	} else {
 		aneg_multigbt_an_ctrl &= ~CR_2500T_FD_CAPS;
@@ -303,7 +303,7 @@ static int32_t igc_phy_setup_autoneg(struct igc_hw *hw)
 	if (ret_val)
 		return ret_val;
 
-	printf("igc driver: Auto-Neg Advertising %x\n", mii_autoneg_adv_reg);
+	igc_logger(IGC_LOG_INF, " Auto-Neg Advertising %x\n", mii_autoneg_adv_reg);
 
 	if (phy->autoneg_mask & ADVERTISE_1000_FULL)
 		ret_val = phy->ops.write_reg(hw, PHY_1000T_CTRL,
@@ -376,13 +376,13 @@ static int32_t igc_copper_link_autoneg(struct igc_hw *hw)
 	if (phy->autoneg_advertised == 0)
 		phy->autoneg_advertised = phy->autoneg_mask;
 
-	printf("igc driver: Reconfiguring auto-neg advertisement params\n");
+	igc_logger(IGC_LOG_INF, " Reconfiguring auto-neg advertisement params\n");
 	ret_val = igc_phy_setup_autoneg(hw);
 	if (ret_val) {
-		printf("igc driver: Error Setting up Auto-Negotiation\n");
+		igc_logger(IGC_LOG_ERR, "Setting up Auto-Negotiation\n");
 		goto out;
 	}
-	printf("igc driver: Restarting Auto-Neg\n");
+	igc_logger(IGC_LOG_INF, " Restarting Auto-Neg\n");
 
 	/* Restart auto-negotiation by setting the Auto Neg Enable bit and
 	 * the Auto Neg Restart bit in the PHY control register.
@@ -400,10 +400,9 @@ static int32_t igc_copper_link_autoneg(struct igc_hw *hw)
 	 * check at a later time (for example, callback routine).
 	 */
 	if (phy->autoneg_wait_to_complete) {
-		printf("################################# do I ever run man!?!?!?!?");
 		ret_val = igc_wait_autoneg(hw);
 		if (ret_val) {
-			printf("igc driver: Error while waiting for autoneg to complete\n");
+			igc_logger(IGC_LOG_ERR, "waiting for autoneg to complete\n");
 			goto out;
 		}
 	}
@@ -439,10 +438,10 @@ int32_t igc_setup_copper_link(struct igc_hw *hw)
 		/* PHY will be set to 10H, 10F, 100H or 100F
 		 * depending on user settings.
 		 */
-		printf("igc driver: Forcing Speed and Duplex\n");
+		igc_logger(IGC_LOG_INF, " Forcing Speed and Duplex\n");
 		ret_val = hw->phy.ops.force_speed_duplex(hw);
 		if (ret_val) {
-			printf("igc driver: Error Forcing Speed and Duplex\n");
+			igc_logger(IGC_LOG_ERR, "Forcing Speed and Duplex\n");
 			goto out;
 		}
 	}
@@ -455,11 +454,11 @@ int32_t igc_setup_copper_link(struct igc_hw *hw)
 		goto out;
 
 	if (link) {
-		printf("igc driver: Valid link established!!!\n");
+		igc_logger(IGC_LOG_INF, " Valid link established!!!\n");
 		igc_config_collision_dist(hw);
 		ret_val = igc_config_fc_after_link_up(hw);
 	} else {
-		printf("igc driver: Unable to establish link!!!\n");
+		igc_logger(IGC_LOG_INF, " Unable to establish link!!!\n");
 	}
 
 out:
@@ -482,7 +481,7 @@ static int32_t igc_read_phy_reg_mdic(struct igc_hw *hw, uint32_t offset, uint16_
 	int32_t ret_val = 0;
 
 	if (offset > MAX_PHY_REG_ADDRESS) {
-		printf("igc driver: PHY Address %d is out of range\n", offset);
+		igc_logger(IGC_LOG_INF, " PHY Address %d is out of range\n", offset);
 		ret_val = -IGC_ERR_PARAM;
 		goto out;
 	}
@@ -508,12 +507,12 @@ static int32_t igc_read_phy_reg_mdic(struct igc_hw *hw, uint32_t offset, uint16_
 			break;
 	}
 	if (!(mdic & IGC_MDIC_READY)) {
-		printf("igc driver: MDI Read did not complete\n");
+		igc_logger(IGC_LOG_ERR, "MDI Read did not complete\n");
 		ret_val = -IGC_ERR_PHY;
 		goto out;
 	}
 	if (mdic & IGC_MDIC_ERROR) {
-		printf("igc driver: MDI Error\n");
+		igc_logger(IGC_LOG_ERR, "MDI read\n");
 		ret_val = -IGC_ERR_PHY;
 		goto out;
 	}
@@ -538,7 +537,7 @@ static int32_t igc_write_phy_reg_mdic(struct igc_hw *hw, uint32_t offset, uint16
 	int32_t ret_val = 0;
 
 	if (offset > MAX_PHY_REG_ADDRESS) {
-		printf("igc driver: PHY Address %d is out of range\n", offset);
+		igc_logger(IGC_LOG_INF, " PHY Address %d is out of range\n", offset);
 		ret_val = -IGC_ERR_PARAM;
 		goto out;
 	}
@@ -565,12 +564,12 @@ static int32_t igc_write_phy_reg_mdic(struct igc_hw *hw, uint32_t offset, uint16
 			break;
 	}
 	if (!(mdic & IGC_MDIC_READY)) {
-		printf("igc driver: MDI Write did not complete\n");
+		igc_logger(IGC_LOG_ERR, "MDI Write did not complete\n");
 		ret_val = -IGC_ERR_PHY;
 		goto out;
 	}
 	if (mdic & IGC_MDIC_ERROR) {
-		printf("igc driver: MDI Error\n");
+		igc_logger(IGC_LOG_ERR, "MDI write\n");
 		ret_val = -IGC_ERR_PHY;
 		goto out;
 	}
@@ -720,7 +719,7 @@ uint16_t igc_read_phy_fw_version(struct igc_hw *hw)
 	/* NVM image version is reported as firmware version for i225 device */
 	ret_val = phy->ops.read_reg(hw, IGC_GPHY_VERSION, &gphy_version);
 	if (ret_val)
-		printf("igc driver: igc_phy: read wrong gphy version\n");
+		igc_logger(IGC_LOG_ERR, "read wrong gphy version\n");
 
 	return gphy_version;
 }

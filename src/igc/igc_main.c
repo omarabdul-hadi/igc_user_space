@@ -18,6 +18,28 @@
 
 #include "../atemsys_main.h"
 #include "igc.h"
+#include "igc_log.h"
+
+int global_log_level = IGC_LOG_ERR;
+
+void igc_logger(int msg_log_level, char * msg, ...)
+{
+    va_list argp;
+    va_start(argp, msg);
+
+    if(msg_log_level >= global_log_level )
+    {
+		if (msg_log_level == IGC_LOG_INF)
+	    	printf("igc driver INF: ");
+		else if (msg_log_level == IGC_LOG_ERR)
+	    	printf("igc driver ERR: ");
+		else
+	    	printf("igc driver UNSUPPORTED LOG LEVEL: ");
+
+       vprintf(msg, argp);
+    }
+    va_end(argp);
+}
 
 void igc_reset(struct igc_adapter *adapter, bool power_down_phy)
 {
@@ -26,7 +48,7 @@ void igc_reset(struct igc_adapter *adapter, bool power_down_phy)
 	hw->mac.ops.reset_hw(hw);
 
 	if (hw->mac.ops.init_hw(hw))
-		printf("igc driver: error: Error on hardware initialization\n");
+		igc_logger(IGC_LOG_ERR, "hardware initialization\n");
 
 	if (power_down_phy)
 		igc_power_down_phy_copper_base(&adapter->hw);
@@ -163,7 +185,7 @@ int igc_setup_tx_resources(struct igc_adapter *adapter)
 
 err:
 	free(tx_ring->tx_buffer_info);
-	printf("igc driver: error: Unable to allocate memory for Tx descriptor ring\n");
+	igc_logger(IGC_LOG_ERR, "Unable to allocate memory for Tx descriptor ring\n");
 	return -1;
 }
 
@@ -231,7 +253,7 @@ int igc_setup_rx_resources(struct igc_adapter *adapter)
 err:
 	free(rx_ring->rx_buffer_info);
 	rx_ring->rx_buffer_info = NULL;
-	printf("igc driver: error: Unable to allocate memory for Rx descriptor ring\n");
+	igc_logger(IGC_LOG_ERR, "Unable to allocate memory for Rx descriptor ring\n");
 	return -1;
 }
 
@@ -445,7 +467,7 @@ static void igc_alloc_rx_buffers(struct igc_adapter *adapter, uint16_t cleaned_c
 		if (unlikely(!bi->data)) {
 			bi->data = atemsys_map_dma(adapter->fd, RX_BUFF_SIZE, PROT_READ);
 			if (unlikely(!bi->data)) {
-				printf("igc driver: mem allocation failed\n");
+				igc_logger(IGC_LOG_INF, " mem allocation failed\n");
 				break;
 			}
 			bi->dma = atemsys_get_dma_addr(bi->data);
@@ -655,7 +677,7 @@ static void igc_update_link(struct igc_adapter *adapter)
 
 			ctrl = rd32(IGC_CTRL);
 			/* Link status message must follow this format */
-			printf("igc driver: info NIC Link is Up %d Mbps %s Duplex, Flow Control: %s\n",
+			igc_logger(IGC_LOG_INF, "NIC Link is Up %d Mbps %s Duplex, Flow Control: %s\n",
 				    adapter->link_speed,
 				    adapter->link_duplex == FULL_DUPLEX ?
 				    "Full" : "Half",
@@ -677,10 +699,10 @@ retry_read_status:
 					retry_count--;
 					goto retry_read_status;
 				} else if (!retry_count) {
-					printf("igc driver: error: exceed max 2 second\n");
+					igc_logger(IGC_LOG_ERR, "exceed max 2 second\n");
 				}
 			} else {
-				printf("igc driver: error: read 1000Base-T Status Reg\n");
+				igc_logger(IGC_LOG_ERR, "read 1000Base-T Status Reg\n");
 			}
 no_wait:
 			adapter->link = true;
@@ -691,7 +713,7 @@ no_wait:
 			adapter->link_duplex = 0;
 
 			/* Links status message must follow this format */
-			printf("igc driver: info: NIC Link is Down\n");
+			igc_logger(IGC_LOG_INF, "NIC Link is Down\n");
 			adapter->link = false;
 		}
 	}
@@ -720,14 +742,14 @@ int igc_open(struct igc_adapter *adapter)
 
 	err = igc_setup_tx_resources(adapter);
 	if (err) {
-		printf("Error during Tx queue setup\n");
+		igc_logger(IGC_LOG_ERR, "during Tx queue setup\n");
 		igc_free_tx_resources(adapter);
 		goto err_setup_tx;
 	}
 
 	err = igc_setup_rx_resources(adapter);
 	if (err) {
-		printf("Error during Rx queue setup\n");
+		igc_logger(IGC_LOG_ERR, "during Rx queue setup\n");
 		igc_free_rx_resources(adapter);
 		goto err_setup_rx;
 	}
@@ -767,7 +789,7 @@ uint32_t igc_rd32(struct igc_hw *hw, uint32_t reg) {
 		return ( *((uint32_t*) (hw->hw_addr + reg)) );
 	}
 	else {
-		printf("igc driver: fatal error, hardware io data pointer is null\n");
+		igc_logger(IGC_LOG_ERR, "hardware io data pointer is null\n");
 		return 0;
 	}
 }
@@ -806,7 +828,7 @@ int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr)
 
 	if (igc_get_flash_presence_i225(hw)) {
 		if (hw->nvm.ops.validate(hw) < 0) {
-			printf("igc driver: The NVM Checksum Is Not Valid\n");
+			igc_logger(IGC_LOG_ERR, "The NVM Checksum Is Not Valid\n");
 			err = -1;
 			goto err_eeprom;
 		}
@@ -814,7 +836,7 @@ int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr)
 
 	/* copy the MAC address out of the NVM */
 	if (hw->mac.ops.read_mac_addr(hw))
-		printf("igc driver: NVM Read Error\n");
+		igc_logger(IGC_LOG_ERR, "NVM Read\n");
 
 	/* configure RXPBSIZE and TXPBSIZE */
 	wr32(IGC_RXPBS, I225_RXPBSIZE_DEFAULT);

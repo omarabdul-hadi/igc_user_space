@@ -41,7 +41,7 @@ int32_t igc_disable_pcie_master(struct igc_hw *hw)
 	}
 
 	if (!timeout) {
-		printf("igc driver: Master requests are pending.\n");
+		igc_logger(IGC_LOG_INF, " Master requests are pending.\n");
 		ret_val = -IGC_ERR_MASTER_REQUESTS_PENDING;
 		goto out;
 	}
@@ -65,12 +65,12 @@ void igc_init_rx_addrs(struct igc_hw *hw, uint16_t rar_count)
 	uint32_t i;
 
 	/* Setup the receive address */
-	printf("igc driver: Programming MAC Address into RAR[0]\n");
+	igc_logger(IGC_LOG_INF, " Programming MAC Address into RAR[0]\n");
 
 	hw->mac.ops.rar_set(hw, hw->mac.addr, 0);
 
 	/* Zero out the other (rar_entry_count - 1) receive addresses */
-	printf("igc driver: Clearing RAR[1-%u]\n", rar_count - 1);
+	igc_logger(IGC_LOG_INF, " Clearing RAR[1-%u]\n", rar_count - 1);
 	for (i = 1; i < rar_count; i++)
 		hw->mac.ops.rar_set(hw, mac_addr, i);
 }
@@ -129,7 +129,7 @@ int32_t igc_setup_link(struct igc_hw *hw)
 	 * control is disabled, because it does not hurt anything to
 	 * initialize these registers.
 	 */
-	printf("igc driver: Initializing the Flow Control address, type and timer regs\n");
+	igc_logger(IGC_LOG_INF, " Initializing the Flow Control address, type and timer regs\n");
 	wr32(IGC_FCT, FLOW_CONTROL_TYPE);
 	wr32(IGC_FCAH, FLOW_CONTROL_ADDRESS_HIGH);
 	wr32(IGC_FCAL, FLOW_CONTROL_ADDRESS_LOW);
@@ -154,7 +154,7 @@ out:
  */
 int32_t igc_force_mac_fc(struct igc_hw *hw)
 {
-	printf("igc driver: turn off flow control\n");
+	igc_logger(IGC_LOG_INF, " turn off flow control\n");
 
 	uint32_t ctrl = rd32(IGC_CTRL);
 	ctrl &= (~(IGC_CTRL_TFCE | IGC_CTRL_RFCE));
@@ -339,7 +339,7 @@ int32_t igc_check_for_copper_link(struct igc_hw *hw)
 	 */
 	ret_val = igc_config_fc_after_link_up(hw);
 	if (ret_val)
-		printf("igc driver: Error configuring flow control\n");
+		igc_logger(IGC_LOG_ERR, "configuring flow control\n");
 
 out:
 	/* Now that we are aware of our link settings, we can set the LTR
@@ -396,7 +396,7 @@ int32_t igc_config_fc_after_link_up(struct igc_hw *hw)
 		ret_val = igc_force_mac_fc(hw);
 
 	if (ret_val) {
-		printf("igc driver: Error forcing flow control settings\n");
+		igc_logger(IGC_LOG_ERR, "forcing flow control settings\n");
 		goto out;
 	}
 
@@ -420,7 +420,7 @@ int32_t igc_config_fc_after_link_up(struct igc_hw *hw)
 			goto out;
 
 		if (!(mii_status_reg & MII_SR_AUTONEG_COMPLETE)) {
-			printf("igc driver: Copper PHY and Auto Neg has not completed.\n");
+			igc_logger(IGC_LOG_INF, " Copper PHY and Auto Neg has not completed.\n");
 			goto out;
 		}
 
@@ -441,14 +441,14 @@ int32_t igc_config_fc_after_link_up(struct igc_hw *hw)
 
 		ret_val = hw->mac.ops.get_speed_and_duplex(hw, &speed, &duplex);
 		if (ret_val) {
-			printf("igc driver: Error getting link speed and duplex\n");
+			igc_logger(IGC_LOG_ERR, "getting link speed and duplex\n");
 			goto out;
 		}
 
 		//turn off flow control
 		ret_val = igc_force_mac_fc(hw);
 		if (ret_val) {
-			printf("igc driver: Error forcing flow control settings\n");
+			igc_logger(IGC_LOG_ERR, "forcing flow control settings\n");
 			goto out;
 		}
 	}
@@ -476,7 +476,7 @@ int32_t igc_get_auto_rd_done(struct igc_hw *hw)
 	}
 
 	if (i == AUTO_READ_DONE_TIMEOUT) {
-		printf("igc driver: Auto read by HW from NVM has not completed.\n");
+		igc_logger(IGC_LOG_INF, " Auto read by HW from NVM has not completed.\n");
 		ret_val = -IGC_ERR_RESET;
 		goto out;
 	}
@@ -507,25 +507,25 @@ int32_t igc_get_speed_and_duplex_copper(struct igc_hw *hw, uint16_t *speed,
 		 */
 		if (status & IGC_STATUS_SPEED_2500) {
 			*speed = SPEED_2500;
-			printf("igc driver: 2500 Mbs, ");
+			igc_logger(IGC_LOG_INF, " 2500 Mbs, ");
 		} else {
 			*speed = SPEED_1000;
-			printf("igc driver: 1000 Mbs, ");
+			igc_logger(IGC_LOG_INF, " 1000 Mbs, ");
 		}
 	} else if (status & IGC_STATUS_SPEED_100) {
 		*speed = SPEED_100;
-		printf("igc driver: 100 Mbs, ");
+		igc_logger(IGC_LOG_INF, " 100 Mbs, ");
 	} else {
 		*speed = SPEED_10;
-		printf("igc driver: 10 Mbs, ");
+		igc_logger(IGC_LOG_INF, " 10 Mbs, ");
 	}
 
 	if (status & IGC_STATUS_FD) {
 		*duplex = FULL_DUPLEX;
-		printf("igc driver: Full Duplex\n");
+		igc_logger(IGC_LOG_INF, " Full Duplex\n");
 	} else {
 		*duplex = HALF_DUPLEX;
-		printf("igc driver: Half Duplex\n");
+		igc_logger(IGC_LOG_INF, " Half Duplex\n");
 	}
 
 	return 0;

@@ -14,10 +14,9 @@
 #include "igc_nvm.h"
 #include "igc_i225.h"
 #include "igc_base.h"
-
+#include "igc_log.h"
 
 #define IGC_DEV_ID_I225_V 0x15F3
-
 
 /* Function pointers for the MAC. */
 struct igc_mac_operations {

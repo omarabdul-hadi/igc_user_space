@@ -24,9 +24,9 @@ static int32_t igc_reset_hw_base(struct igc_hw *hw)
 	 */
 	ret_val = igc_disable_pcie_master(hw);
 	if (ret_val)
-		printf("igc driver: PCI-E Master disable polling has failed\n");
+		igc_logger(IGC_LOG_INF, " PCI-E Master disable polling has failed\n");
 
-	printf("igc driver: Masking off all interrupts\n");
+	igc_logger(IGC_LOG_INF, " Masking off all interrupts\n");
 	wr32(IGC_IMC, 0xffffffff);
 
 	wr32(IGC_RCTL, 0);
@@ -37,7 +37,7 @@ static int32_t igc_reset_hw_base(struct igc_hw *hw)
 
 	ctrl = rd32(IGC_CTRL);
 
-	printf("igc driver: Issuing a global reset to MAC\n");
+	igc_logger(IGC_LOG_INF, " Issuing a global reset to MAC\n");
 	wr32(IGC_CTRL, ctrl | IGC_CTRL_RST);
 
 	ret_val = igc_get_auto_rd_done(hw);
@@ -46,7 +46,7 @@ static int32_t igc_reset_hw_base(struct igc_hw *hw)
 		 * return with an error. This can happen in situations
 		 * where there is no eeprom and prevents getting link.
 		 */
-		printf("igc driver: Auto Read Done did not complete\n");
+		igc_logger(IGC_LOG_INF, " Auto Read Done did not complete\n");
 	}
 
 	/* Clear any pending interrupt events. */
@@ -164,7 +164,7 @@ static int32_t igc_init_phy_params_base(struct igc_hw *hw)
 	 */
 	ret_val = hw->phy.ops.reset(hw);
 	if (ret_val) {
-		printf("igc driver: Error resetting the PHY\n");
+		igc_logger(IGC_LOG_ERR, "resetting the PHY\n");
 		goto out;
 	}
 
@@ -246,12 +246,12 @@ static int32_t igc_init_hw_base(struct igc_hw *hw)
 	igc_init_rx_addrs(hw, rar_count);
 
 	/* Zero out the Multicast HASH table */
-	printf("igc driver: Zeroing the MTA\n");
+	igc_logger(IGC_LOG_INF, " Zeroing the MTA\n");
 	for (i = 0; i < mac->mta_reg_count; i++)
 		array_wr32(IGC_MTA, i, 0);
 
 	/* Zero out the Unicast HASH table */
-	printf("igc driver: Zeroing the UTA\n");
+	igc_logger(IGC_LOG_INF, " Zeroing the UTA\n");
 	for (i = 0; i < mac->uta_reg_count; i++)
 		array_wr32(IGC_UTA, i, 0);
 
@@ -318,7 +318,7 @@ void igc_rx_fifo_flush_base(struct igc_hw *hw)
 	}
 
 	if (ms_wait == 10)
-		printf("igc driver: Queue disable timed out after 10ms\n");
+		igc_logger(IGC_LOG_INF, " Queue disable timed out after 10ms\n");
 
 	/* Clear RLPML, RCTL.SBP, RFCTL.LEF, and set RCTL.LPE so that all
 	 * incoming packets are rejected.  Set enable and wait 2ms so that
