@@ -134,7 +134,7 @@ out:
     return ret;
 }
 
-void igc_user_space_init() {
+void igc_user_space_init(uint32_t rx_timeout_us) {
 	printf("Intel(R) 2.5G Ethernet Linux Driver\n");
 	printf("driver name: igc\n");
 	printf("auther: Intel Corporation, <linux.nics@intel.com>\n");
@@ -144,7 +144,7 @@ void igc_user_space_init() {
 	int fd = atemsys_pci_open(&pci_device_descriptor);
     void* io_addr = atemsys_map_io(fd, &pci_device_descriptor);
 
-	igc_probe(&adapter, fd, (uint8_t*)io_addr);
+	igc_probe(&adapter, fd, (uint8_t*)io_addr, rx_timeout_us);
 	igc_open(&adapter);
 
 	atemsys_pci_intr_enable(fd, &pci_device_descriptor);

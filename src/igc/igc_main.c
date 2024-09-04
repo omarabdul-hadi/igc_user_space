@@ -513,9 +513,18 @@ int igc_clean_rx_irq(struct igc_adapter *adapter, uint8_t* receive_pkt)
 	union igc_adv_rx_desc *rx_desc = IGC_RX_DESC(rx_ring, rx_ring->next_to_clean);
 	struct igc_rx_buffer *rx_buffer = &rx_ring->rx_buffer_info[rx_ring->next_to_clean];
 	int len = le16_to_cpu(rx_desc->wb.upper.length);
+	uint32_t i = 0;
+	static const uint32_t POLL_PERIOD_US = 10;
 
 	while (!len) {
-		usleep(10);
+		if (i++*POLL_PERIOD_US > adapter->rx_timeout_us) {
+			// todo: add api to check if there are queued frames
+			// this can be checked by seeing if the head is more than 1 position ahead of the tail
+			//struct igc_hw *hw = &adapter->hw;
+			//printf("rx head: %i, rx tail: %i\n", rd32(IGC_RDH), rd32(IGC_RDT));
+			return 0;
+		}
+		usleep(POLL_PERIOD_US);
 		len = le16_to_cpu(rx_desc->wb.upper.length);
 	}
 	memcpy(receive_pkt, rx_buffer->data, len);
@@ -794,14 +803,15 @@ uint32_t igc_rd32(struct igc_hw *hw, uint32_t reg) {
 	}
 }
 
-int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr)
+int igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr, uint32_t rx_timeout_us)
 {
 	int err;
 	struct igc_hw *hw = &adapter->hw;
 
-	adapter->fd      = fd;
-	adapter->io_addr = io_addr;
-	hw->hw_addr      = io_addr;
+	adapter->fd            = fd;
+	adapter->io_addr       = io_addr;
+	hw->hw_addr            = io_addr;
+	adapter->rx_timeout_us = rx_timeout_us;
 
 	/* Copy the default MAC and PHY function pointers */
 	memcpy(&hw->mac.ops, igc_base_info.mac_ops, sizeof(hw->mac.ops));

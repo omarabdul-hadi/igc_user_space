@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 bool     igc_user_space_supported();
-void     igc_user_space_init();
+void     igc_user_space_init(uint32_t rx_timeout_us);
 void     igc_user_space_deinit();
 void     igc_user_space_get_mac(uint8_t* data);
 bool     igc_user_space_get_link_status();

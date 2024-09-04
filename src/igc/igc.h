@@ -45,6 +45,7 @@ struct igc_ring {
 /* Board specific private data structure */
 struct igc_adapter {
 	int fd;
+	uint32_t rx_timeout_us;
 
 	bool state_down;
 
@@ -59,7 +60,7 @@ struct igc_adapter {
 	struct igc_hw hw;
 };
 
-int  igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr);
+int  igc_probe(struct igc_adapter *adapter, int fd, uint8_t* io_addr, uint32_t rx_timeout_us);
 int  igc_open(struct igc_adapter *adapter);
 int  igc_close(struct igc_adapter *adapter);
 void igc_send_frame(struct igc_adapter *adapter, uint8_t* data, int len);
