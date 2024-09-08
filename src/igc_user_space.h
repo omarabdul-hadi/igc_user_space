@@ -11,5 +11,6 @@ void     igc_user_space_get_mac(uint8_t* data);
 bool     igc_user_space_get_link_status();
 void     igc_user_space_send_frame(uint8_t* data, int len);
 uint32_t igc_user_space_receive_frame(uint8_t* receive_pkt);
+uint32_t igc_user_space_get_num_queued_rx();
 
 #endif /* _IGC_USER_SPACE_API_H_ */

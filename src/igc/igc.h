@@ -65,6 +65,7 @@ int  igc_open(struct igc_adapter *adapter);
 int  igc_close(struct igc_adapter *adapter);
 void igc_send_frame(struct igc_adapter *adapter, uint8_t* data, int len);
 void igc_intr_msi(struct igc_adapter *adapter);
+int  igc_get_num_queued_rx(struct igc_adapter *adapter);
 void igc_clean_tx_irq(struct igc_adapter *adapter);
 int  igc_clean_rx_irq(struct igc_adapter *adapter, uint8_t* receive_pkt);
 void igc_remove(struct igc_adapter *adapter);

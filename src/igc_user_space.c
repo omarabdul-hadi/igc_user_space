@@ -178,3 +178,9 @@ uint32_t igc_user_space_receive_frame(uint8_t* receive_pkt) {
 	igc_clean_tx_irq(&adapter);
 	return igc_clean_rx_irq(&adapter, receive_pkt);
 }
+
+// warning this api is very slow, ~ 120 us, because it does direct mma access to hardware, this is meant for debugging only
+// purpose is to double check that when a frame times out, there aren't any queued frames
+uint32_t igc_user_space_get_num_queued_rx() {
+	return igc_get_num_queued_rx(&adapter);
+}

@@ -506,6 +506,17 @@ static void igc_alloc_rx_buffers(struct igc_adapter *adapter, uint16_t cleaned_c
 	}
 }
 
+int igc_get_num_queued_rx(struct igc_adapter *adapter) {
+	struct igc_hw *hw = &adapter->hw;
+	int queued_rx = rd32(IGC_RDH) - rd32(IGC_RDT) - 1; // if there are no queued frames, the head is normaly one pos ahead of the tail
+	// note that using rx_ring.next_to_clean and rx_ring.next_to_alloc although doesn't require hardware reads,
+	// it doesn't end up giving us the correct answer
+	if (queued_rx < 0) {
+		queued_rx += adapter->rx_ring.count;
+	}
+	return queued_rx;
+}
+
 int igc_clean_rx_irq(struct igc_adapter *adapter, uint8_t* receive_pkt)
 {
 	struct igc_ring *rx_ring = &adapter->rx_ring;
@@ -518,10 +529,6 @@ int igc_clean_rx_irq(struct igc_adapter *adapter, uint8_t* receive_pkt)
 
 	while (!len) {
 		if (i++*POLL_PERIOD_US > adapter->rx_timeout_us) {
-			// todo: add api to check if there are queued frames
-			// this can be checked by seeing if the head is more than 1 position ahead of the tail
-			//struct igc_hw *hw = &adapter->hw;
-			//printf("rx head: %i, rx tail: %i\n", rd32(IGC_RDH), rd32(IGC_RDT));
 			return 0;
 		}
 		usleep(POLL_PERIOD_US);
