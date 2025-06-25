@@ -24,12 +24,6 @@ int atemsys_pci_open(ATEMSYS_T_PCI_SELECT_DESC* pci_device_descriptor) {
         return 0;
     }
 
-    // $ lspci -nn | grep -i 'Ethernet Controller'
-    // 56:00.0 Ethernet controller [0200]: Intel Corporation Ethernet Controller I225-V [8086:15f3] (rev 03)
-    pci_device_descriptor->nVendID   = 0x8086;   // intel
-    pci_device_descriptor->nDevID    = 0x15f3;   // I225-V
-    pci_device_descriptor->nInstance = 0;
-
     if (ioctl(fd, ATEMSYS_IOCTL_PCI_FIND_DEVICE, pci_device_descriptor) == -1) {
         printf("ioctl atemsys ATEMSYS_IOCTL_PCI_FIND_DEVICE request failed\n");
         return 0;

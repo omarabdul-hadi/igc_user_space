@@ -83,10 +83,26 @@ int find_vendor_and_device_id_str(const char *str, PCI_ID* pci_id) {
 	return 0;
 }
 
-#define INTEL_VENDOR_ID 0x8086
-#define I225V_DEVICE_ID 0x15f3
+#define INTEL_VENDOR_ID           0x8086
 
-bool igc_user_space_supported() {
+#define IGC_DEV_ID_I225_LM        0x15F2
+#define IGC_DEV_ID_I225_V         0x15F3
+#define IGC_DEV_ID_I225_I         0x15F8
+#define IGC_DEV_ID_I220_V         0x15F7
+#define IGC_DEV_ID_I225_K         0x3100
+#define IGC_DEV_ID_I225_K2        0x3101
+#define IGC_DEV_ID_I226_K         0x3102
+#define IGC_DEV_ID_I225_LMVP      0x5502
+#define IGC_DEV_ID_I226_LMVP      0x5503
+#define IGC_DEV_ID_I225_IT        0x0D9F
+#define IGC_DEV_ID_I226_LM        0x125B
+#define IGC_DEV_ID_I226_V         0x125C
+#define IGC_DEV_ID_I226_IT        0x125D
+#define IGC_DEV_ID_I221_V         0x125E
+#define IGC_DEV_ID_I226_BLANK_NVM 0x125F
+#define IGC_DEV_ID_I225_BLANK_NVM 0x15FD
+
+bool igc_user_space_supported(uint16_t *vendor_id, uint16_t *device_id) {
 
     char output[10][LINE_MAX_BUFFER_SIZE];
     int a = runExternalCommand("lspci -nn | grep -i 'Ethernet Controller'", output);
@@ -95,8 +111,25 @@ bool igc_user_space_supported() {
 	// loop over all ethernet controllers incase there are multiple ones
     for (int i = 0; i < a; ++ i) {
 		if (!find_vendor_and_device_id_str(output[i], &pci_id) &&
-		     pci_id.vendor_id == INTEL_VENDOR_ID               &&
-			 pci_id.device_id == I225V_DEVICE_ID)
+		    pci_id.vendor_id == INTEL_VENDOR_ID                &&
+           (pci_id.device_id == IGC_DEV_ID_I225_LM             ||
+			pci_id.device_id == IGC_DEV_ID_I225_V              ||
+			pci_id.device_id == IGC_DEV_ID_I225_I              ||
+			pci_id.device_id == IGC_DEV_ID_I220_V              ||
+			pci_id.device_id == IGC_DEV_ID_I225_K              ||
+			pci_id.device_id == IGC_DEV_ID_I225_K2             ||
+			pci_id.device_id == IGC_DEV_ID_I226_K              ||
+			pci_id.device_id == IGC_DEV_ID_I225_LMVP           ||
+			pci_id.device_id == IGC_DEV_ID_I226_LMVP           ||
+			pci_id.device_id == IGC_DEV_ID_I225_IT             ||
+			pci_id.device_id == IGC_DEV_ID_I226_LM             ||
+			pci_id.device_id == IGC_DEV_ID_I226_V              ||
+			pci_id.device_id == IGC_DEV_ID_I226_IT             ||
+			pci_id.device_id == IGC_DEV_ID_I221_V              ||
+			pci_id.device_id == IGC_DEV_ID_I226_BLANK_NVM      ||
+			pci_id.device_id == IGC_DEV_ID_I225_BLANK_NVM        ) )
+			*vendor_id = pci_id.vendor_id;
+			*device_id = pci_id.device_id;
 			return true;
     }
 	return false;
@@ -134,12 +167,18 @@ out:
     return ret;
 }
 
-void igc_user_space_init(uint32_t rx_timeout_us) {
+void igc_user_space_init(uint16_t vendor_id, uint16_t device_id, uint32_t rx_timeout_us) {
 	printf("Intel(R) 2.5G Ethernet Linux Driver\n");
 	printf("driver name: igc\n");
 	printf("auther: Intel Corporation, <linux.nics@intel.com>\n");
 	printf("Copyright(c) 2018 Intel Corporation.\n");
 	printf("Driver has been minimalized and moved to user space by Omar Abdul-hadi to reduce latency\n");
+
+    // $ lspci -nn | grep -i 'Ethernet Controller'
+    // 56:00.0 Ethernet controller [0200]: Intel Corporation Ethernet Controller I225-V [8086:15f3] (rev 03)
+    pci_device_descriptor.nVendID   = vendor_id;
+    pci_device_descriptor.nDevID    = device_id;
+    pci_device_descriptor.nInstance = 0;
 
 	int fd = atemsys_pci_open(&pci_device_descriptor);
     void* io_addr = atemsys_map_io(fd, &pci_device_descriptor);

@@ -118,14 +118,17 @@ void test_cycle() {
 
 void *thread_func(void *) {
 
-	uint8_t mac_addr[6]= {0};
+	uint8_t  mac_addr[6] = {0};
+	uint16_t vendor_id;
+	uint16_t device_id;
+	uint32_t rx_timeout_us = 188; // 0.75*250 us
 
-	if (!igc_user_space_supported()) {
+	if (!igc_user_space_supported(&vendor_id, &device_id)) {
 		printf("igc user space driver not supported on any of the available pcie ethernet cards\n");
 		return 0;
 	}
 
-	igc_user_space_init();
+	igc_user_space_init(vendor_id, device_id, rx_timeout_us);
 	igc_user_space_get_mac(mac_addr);
 	printf("Mac addr is: %02x:%02x:%02x:%02x:%02x:%02x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 
@@ -137,17 +140,11 @@ void *thread_func(void *) {
 	test_cycle();
     igc_user_space_deinit();
 
-	igc_user_space_init();
-	//static int iii = 0;
-	//while (iii < 1000) {
+	// test reinitialization
+	igc_user_space_init(vendor_id, device_id, rx_timeout_us);
 	while (true) {
-	//	iii++;
 		test_cycle();
 	}
-    igc_user_space_deinit();
-
-	igc_user_space_init();
-	test_cycle();
     igc_user_space_deinit();
 
 	return NULL;
