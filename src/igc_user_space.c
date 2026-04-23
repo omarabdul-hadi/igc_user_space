@@ -127,10 +127,11 @@ bool igc_user_space_supported(uint16_t *vendor_id, uint16_t *device_id) {
 			pci_id.device_id == IGC_DEV_ID_I226_IT             ||
 			pci_id.device_id == IGC_DEV_ID_I221_V              ||
 			pci_id.device_id == IGC_DEV_ID_I226_BLANK_NVM      ||
-			pci_id.device_id == IGC_DEV_ID_I225_BLANK_NVM        ) )
+			pci_id.device_id == IGC_DEV_ID_I225_BLANK_NVM        ) ) {
 			*vendor_id = pci_id.vendor_id;
 			*device_id = pci_id.device_id;
 			return true;
+		}
     }
 	return false;
 }
